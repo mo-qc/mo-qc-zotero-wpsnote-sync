@@ -1,2 +1,14 @@
-pref("enable", true);
-pref("input", "This is input");
+pref("wpsMcpEndpoint", "https://ainote.kdocs.cn/mcp-svc/mcp");
+pref("wpsMcpApiKey", "");
+pref("defaultTags", "Zotero");
+pref("updateExisting", true);
+pref("titleTemplate", "[Zotero] {{title}}");
+pref("bodyTemplate", "");
+pref("syncMapping", "{}");
+pref("syncIncludeAbstract", true);
+pref("syncIncludeAttachments", true);
+pref("syncIncludeAnnotations", true);
+pref("syncIncludeTags", true);
+pref("syncIncludeNotes", true);
+pref("autoSyncEnabled", false);
+pref("autoSyncTag", "");

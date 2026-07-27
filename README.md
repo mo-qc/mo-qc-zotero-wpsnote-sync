@@ -1,3 +1,124 @@
+# Zotero → WPS Notes Sync
+
+[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+
+A Zotero 7 plugin that syncs literature items, notes, and PDF links to **WPS Notes** via the WPS MCP (Model Context Protocol) endpoint.
+
+[English](README.md) | [简体中文](doc/README-zhCN.md)
+
+## Features
+
+- **Manual sync**: Sync selected Zotero items to WPS Notes via the right-click menu.
+- **Auto sync**: Automatically sync items when a configurable tag is added.
+- **Rich content**: Syncs metadata, abstract, attachments, PDF annotations, child notes, and tags.
+- **Customizable templates**: Uses a Mustache-like template engine for note title and body.
+- **Deduplication**: Updates existing WPS notes via a local item-key → note-id mapping.
+- **Sync history**: View the last sync status, WPS Note ID, and any errors.
+
+## Requirements
+
+- Zotero 7 (beta or later)
+- Node.js LTS
+- A WPS Notes MCP API Key
+
+## Quick Start
+
+1. Install dependencies:
+
+   ```sh
+   npm install
+   ```
+
+2. Copy `.env.example` to `.env` and set the path to your Zotero beta binary and profile.
+
+   ```sh
+   cp .env.example .env
+   ```
+
+3. Start the development server:
+
+   ```sh
+   npm start
+   ```
+
+   This will build the plugin, launch Zotero, and watch files for hot reload.
+
+4. In Zotero, open the plugin preferences and enter your **WPS MCP API Key** and endpoint.
+
+5. Select one or more items and choose **"Sync to WPS Notes"** from the right-click menu.
+
+## Build
+
+```sh
+npm run build
+```
+
+The built XPI will be in `.scaffold/build/`.
+
+## Configuration
+
+Open **Edit → Preferences → Zotero → WPS Notes Sync** in Zotero.
+
+| Preference            | Description                                                      |
+| --------------------- | ---------------------------------------------------------------- |
+| MCP Endpoint          | WPS MCP endpoint, default: `https://ainote.kdocs.cn/mcp-svc/mcp` |
+| API Key               | Your WPS MCP API key                                             |
+| Default Tags          | Tags to add to every synced note, e.g. `Zotero`                  |
+| Update existing notes | Update existing WPS notes instead of creating duplicates         |
+| Sync content switches | Include abstract, attachments, annotations, tags, child notes    |
+| Auto-sync tag         | Automatically sync items when this tag is added                  |
+| Title/Body templates  | Customize output using the template syntax below                 |
+
+### Template Syntax
+
+Variables are wrapped in double braces, raw XML in triple braces:
+
+```text
+{{title}}
+{{{abstractParagraph}}}
+```
+
+Conditionals:
+
+```text
+{{#if hasAbstract}}
+<h2>Abstract</h2>
+{{{abstractParagraph}}}
+{{/if}}
+```
+
+Loops:
+
+```text
+{{#each attachments}}
+<p>{{title}}</p>
+{{/each}}
+```
+
+Common variables include `title`, `authors`, `yearOrDate`, `publicationTitle`, `itemType`, `DOI`, `url`, `citeKey`, `itemKey`, `abstractParagraph`, `doiLink`, `urlLink`, `hasAnnotations`, `annotationGroupsByColor`, `hasNotes`, `contentParagraph`, and `hasTags`.
+
+## Project Structure
+
+```text
+.
+├── addon/              # Static plugin assets (manifest, bootstrap, UI, locales)
+├── src/                # TypeScript source
+│   ├── modules/        # Business modules (sync engine, MCP client, UI, etc.)
+│   └── utils/          # Shared utilities (template engine, XML helpers, prefs)
+├── test/               # Test files
+├── typings/            # TypeScript declarations
+└── zotero-plugin.config.ts
+```
+
+## Known Limitations
+
+- Only external `http/https` images in child notes are synced; local attachments and data URLs are not yet supported.
+- The API Key is stored as plain text in Zotero preferences (standard for Zotero plugins).
+
+## License
+
+MIT
+
 # Zotero Plugin Template
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)

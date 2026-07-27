@@ -1,4 +1,5 @@
 import { config } from "../../package.json";
+import { decryptString, encryptString } from "./secret";
 
 type PluginPrefsMap = _ZoteroTypes.Prefs["PluginPrefsMap"];
 
@@ -33,4 +34,22 @@ export function setPref<K extends keyof PluginPrefsMap>(
  */
 export function clearPref(key: string) {
   return Zotero.Prefs.clear(`${PREFS_PREFIX}.${key}`, true);
+}
+
+/**
+ * Read the WPS MCP API Key, transparently handling legacy plaintext values.
+ */
+export function getApiKey(): string {
+  const raw = String(getPref("wpsMcpApiKey") || "");
+  if (!raw) return "";
+  const decrypted = decryptString(raw);
+  return decrypted !== null ? decrypted : raw;
+}
+
+/**
+ * Save the WPS MCP API Key using simple obfuscation.
+ */
+export function setApiKey(value: string): void {
+  const trimmed = value.trim();
+  setPref("wpsMcpApiKey", trimmed ? encryptString(trimmed) : "");
 }

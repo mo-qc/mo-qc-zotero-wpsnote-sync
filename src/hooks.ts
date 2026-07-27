@@ -1,13 +1,16 @@
-import {
-  BasicExampleFactory,
-  HelperExampleFactory,
-  KeyExampleFactory,
-  PromptExampleFactory,
-  UIExampleFactory,
-} from "./modules/examples";
 import { getString, initLocale } from "./utils/locale";
-import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
+import { registerMenus, runSync, openSyncHistory } from "./modules/ui";
+import { syncSelectedItems, syncItem } from "./modules/syncEngine";
+import { registerPrefsScripts } from "./modules/preferenceScript";
+import { getPref } from "./utils/prefs";
+
+// Notifier observer ID，用于插件关闭时注销
+let notifierObserverID: string | null = null;
+// 自动同步去重集合，防止同一 item 并发触发多次同步
+const syncingItems = new Set<string>();
+// 每个主窗口注入的样式表，窗口卸载时清理
+const styleSheetRegistry = new WeakMap<Window, HTMLLinkElement>();
 
 async function onStartup() {
   await Promise.all([
@@ -18,124 +21,111 @@ async function onStartup() {
 
   initLocale();
 
-  BasicExampleFactory.registerPrefs();
+  registerPrefs();
 
-  BasicExampleFactory.registerNotifier();
-
-  KeyExampleFactory.registerShortcuts();
-
-  await UIExampleFactory.registerExtraColumn();
-
-  await UIExampleFactory.registerExtraColumnWithCustomCell();
-
-  UIExampleFactory.registerItemPaneCustomInfoRow();
-
-  UIExampleFactory.registerItemPaneSection();
-
-  UIExampleFactory.registerReaderItemPaneSection();
+  // 注册 Zotero.Notifier，监听 item 修改事件（用于标签触发自动同步）
+  notifierObserverID = Zotero.Notifier.registerObserver(
+    { notify: onNotify },
+    ["item"],
+    "zotero-wpsnote-sync",
+  );
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
 
-  // Mark initialized as true to confirm plugin loading status
-  // outside of the plugin (e.g. scaffold testing process)
+  // 暴露 API 供调试/自动化调用
+  (addon.api as any).runSync = runSync;
+  (addon.api as any).syncSelectedItems = syncSelectedItems;
+  (addon.api as any).openSyncHistory = openSyncHistory;
+
   addon.data.initialized = true;
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
-  // Create ztoolkit for every window
-  addon.data.ztoolkit = createZToolkit();
+  // 避免多窗口时重复覆盖全局 ztoolkit 实例
+  if (!addon.data.ztoolkit) {
+    addon.data.ztoolkit = createZToolkit();
+  }
 
   win.MozXULElement.insertFTLIfNeeded(
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  const popupWin = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
-    closeOnClick: true,
-    closeTime: -1,
-  })
-    .createLine({
-      text: getString("startup-begin"),
-      type: "default",
-      progress: 0,
-    })
-    .show();
-
-  await Zotero.Promise.delay(1000);
-  popupWin.changeLine({
-    progress: 30,
-    text: `[30%] ${getString("startup-begin")}`,
-  });
-
-  UIExampleFactory.registerStyleSheet(win);
-
-  UIExampleFactory.registerRightClickMenuItem();
-
-  UIExampleFactory.registerRightClickMenuPopup(win);
-
-  UIExampleFactory.registerWindowMenuWithSeparator();
-
-  PromptExampleFactory.registerNormalCommandExample();
-
-  PromptExampleFactory.registerAnonymousCommandExample(win);
-
-  PromptExampleFactory.registerConditionalCommandExample();
-
-  await Zotero.Promise.delay(1000);
-
-  popupWin.changeLine({
-    progress: 100,
-    text: `[100%] ${getString("startup-finish")}`,
-  });
-  popupWin.startCloseTimer(5000);
-
-  addon.hooks.onDialogEvents("dialogExample");
+  registerStyleSheet(win);
+  registerMenus();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
+  // 清理该窗口注入的样式表
+  const link = styleSheetRegistry.get(win);
+  if (link && link.parentNode) {
+    link.parentNode.removeChild(link);
+    styleSheetRegistry.delete(win);
+  }
   ztoolkit.unregisterAll();
-  addon.data.dialog?.window?.close();
 }
 
 function onShutdown(): void {
+  // 注销 Notifier observer
+  if (notifierObserverID !== null) {
+    try {
+      Zotero.Notifier.unregisterObserver(notifierObserverID);
+    } catch (e) {
+      ztoolkit.log("Failed to unregister notifier observer", e);
+    }
+    notifierObserverID = null;
+  }
+
   ztoolkit.unregisterAll();
-  addon.data.dialog?.window?.close();
-  // Remove addon object
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
   delete Zotero[addon.data.config.addonInstance];
 }
 
-/**
- * This function is just an example of dispatcher for Notify events.
- * Any operations should be placed in a function to keep this funcion clear.
- */
 async function onNotify(
   event: string,
   type: string,
   ids: Array<string | number>,
   extraData: { [key: string]: any },
 ) {
-  // You can add your code to the corresponding notify type
-  ztoolkit.log("notify", event, type, ids, extraData);
-  if (
-    event == "select" &&
-    type == "tab" &&
-    extraData[ids[0]].type == "reader"
-  ) {
-    BasicExampleFactory.exampleNotifierCallback();
-  } else {
-    return;
+  // 自动同步：当启用且条目标签包含 autoSyncTag 时触发同步
+  if (type !== "item" || event !== "modify") return;
+
+  if (!getPref("autoSyncEnabled")) return;
+
+  const autoSyncTag = String(getPref("autoSyncTag") || "").trim();
+  if (!autoSyncTag) return;
+
+  for (const itemId of ids) {
+    const item = Zotero.Items.get(itemId);
+    if (!item || !item.isRegularItem || !item.isRegularItem()) continue;
+
+    const tags = item.getTags
+      ? item
+          .getTags()
+          .map((t: any) => String(t.tag || ""))
+          .filter(Boolean)
+      : [];
+    if (!tags.includes(autoSyncTag)) continue;
+
+    const itemKey = item.key;
+    if (syncingItems.has(itemKey)) continue;
+    syncingItems.add(itemKey);
+
+    try {
+      await syncItem(item, {
+        addTags: ["Zotero"],
+        updateExisting: true,
+      });
+    } catch (e: any) {
+      ztoolkit.log("Auto-sync failed", item.key, e?.message || String(e));
+    } finally {
+      syncingItems.delete(itemKey);
+    }
   }
 }
 
-/**
- * This function is just an example of dispatcher for Preference UI events.
- * Any operations should be placed in a function to keep this funcion clear.
- * @param type event type
- * @param data event data
- */
 async function onPrefsEvent(type: string, data: { [key: string]: any }) {
   switch (type) {
     case "load":
@@ -146,44 +136,29 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
   }
 }
 
-function onShortcuts(type: string) {
-  switch (type) {
-    case "larger":
-      KeyExampleFactory.exampleShortcutLargerCallback();
-      break;
-    case "smaller":
-      KeyExampleFactory.exampleShortcutSmallerCallback();
-      break;
-    default:
-      break;
-  }
+function registerPrefs() {
+  const rootURI = `chrome://${addon.data.config.addonRef}/`;
+  Zotero.PreferencePanes.register({
+    pluginID: addon.data.config.addonID,
+    src: rootURI + "content/preferences.xhtml",
+    label: getString("prefs-title"),
+    image: rootURI + "content/icons/favicon.png",
+  });
 }
 
-function onDialogEvents(type: string) {
-  switch (type) {
-    case "dialogExample":
-      HelperExampleFactory.dialogExample();
-      break;
-    case "clipboardExample":
-      HelperExampleFactory.clipboardExample();
-      break;
-    case "filePickerExample":
-      HelperExampleFactory.filePickerExample();
-      break;
-    case "progressWindowExample":
-      HelperExampleFactory.progressWindowExample();
-      break;
-    case "vtableExample":
-      HelperExampleFactory.vtableExample();
-      break;
-    default:
-      break;
-  }
+function registerStyleSheet(win: Window) {
+  const doc = win.document;
+  const root = doc.documentElement;
+  if (!root) return;
+  // 避免重复注入
+  if (styleSheetRegistry.has(win)) return;
+  const styles = doc.createElement("link");
+  styles.rel = "stylesheet";
+  styles.href = `chrome://${addon.data.config.addonRef}/content/zoteroPane.css`;
+  styles.type = "text/css";
+  root.appendChild(styles);
+  styleSheetRegistry.set(win, styles);
 }
-
-// Add your hooks here. For element click, etc.
-// Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
-// Otherwise the code would be hard to read and maintain.
 
 export default {
   onStartup,
@@ -192,6 +167,4 @@ export default {
   onMainWindowUnload,
   onNotify,
   onPrefsEvent,
-  onShortcuts,
-  onDialogEvents,
 };

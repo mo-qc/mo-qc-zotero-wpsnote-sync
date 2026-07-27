@@ -7,8 +7,20 @@
 declare namespace _ZoteroTypes {
   interface Prefs {
     PluginPrefsMap: {
-      "enable": boolean;
-      "input": string;
+      "wpsMcpEndpoint": string;
+      "wpsMcpApiKey": string;
+      "defaultTags": string;
+      "updateExisting": boolean;
+      "titleTemplate": string;
+      "bodyTemplate": string;
+      "syncMapping": string;
+      "syncIncludeAbstract": boolean;
+      "syncIncludeAttachments": boolean;
+      "syncIncludeAnnotations": boolean;
+      "syncIncludeTags": boolean;
+      "syncIncludeNotes": boolean;
+      "autoSyncEnabled": boolean;
+      "autoSyncTag": string;
     };
   }
 }

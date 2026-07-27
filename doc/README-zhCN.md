@@ -1,3 +1,122 @@
+# Zotero → WPS 笔记同步
+
+[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+
+一个 Zotero 7 插件，通过 WPS MCP（Model Context Protocol）接口将文献条目、子笔记和 PDF 链接同步到 **WPS 笔记**。
+
+## 功能
+
+- **手动同步**：右键选中文献条目后一键同步到 WPS 笔记。
+- **自动同步**：给条目添加指定标签后自动触发同步。
+- **丰富内容**：同步元数据、摘要、附件、PDF 批注、子笔记和标签。
+- **模板自定义**：使用类 Mustache 模板引擎自定义笔记标题与正文。
+- **去重更新**：通过本地映射表更新已存在的 WPS 笔记，避免重复创建。
+- **同步历史**：查看最近同步状态、WPS 笔记 ID 和错误信息。
+
+## 环境要求
+
+- Zotero 7（beta 或更高版本）
+- Node.js LTS
+- WPS 笔记 MCP API Key
+
+## 快速开始
+
+1. 安装依赖：
+
+   ```sh
+   npm install
+   ```
+
+2. 复制环境变量文件并配置 Zotero 路径：
+
+   ```sh
+   cp .env.example .env
+   ```
+
+3. 启动开发服务器：
+
+   ```sh
+   npm start
+   ```
+
+   该命令会自动构建插件、启动 Zotero 并开启热重载。
+
+4. 在 Zotero 插件首选项中填入 **WPS MCP API Key** 和端点。
+
+5. 选中 one 或多个条目，右键选择 **"同步到 WPS 笔记"**。
+
+## 构建
+
+```sh
+npm run build
+```
+
+构建产物位于 `.scaffold/build/`。
+
+## 配置说明
+
+在 Zotero 中打开 **编辑 → 首选项 → Zotero → WPS 笔记同步**。
+
+| 首选项           | 说明                                       |
+| ---------------- | ------------------------------------------ |
+| MCP 端点         | 默认 `https://ainote.kdocs.cn/mcp-svc/mcp` |
+| API Key          | WPS MCP API 密钥                           |
+| 默认标签         | 每次同步时附加的标签，例如 `Zotero`        |
+| 更新已存在的笔记 | 更新已有 WPS 笔记，而非创建新笔记          |
+| 同步内容开关     | 摘要、附件、PDF 批注、标签、子笔记         |
+| 自动同步标签     | 添加该标签后自动同步                       |
+| 标题/正文模板    | 使用模板语法自定义输出格式                 |
+
+### 模板语法
+
+变量使用双大括号，原样输出 XML 使用三大括号：
+
+```text
+{{title}}
+{{{abstractParagraph}}}
+```
+
+条件判断：
+
+```text
+{{#if hasAbstract}}
+<h2>摘要</h2>
+{{{abstractParagraph}}}
+{{/if}}
+```
+
+循环：
+
+```text
+{{#each attachments}}
+<p>{{title}}</p>
+{{/each}}
+```
+
+常用变量包括 `title`、`authors`、`yearOrDate`、`publicationTitle`、`itemType`、`DOI`、`url`、`citeKey`、`itemKey`、`abstractParagraph`、`doiLink`、`urlLink`、`hasAnnotations`、`annotationGroupsByColor`、`hasNotes`、`contentParagraph`、`hasTags` 等。
+
+## 项目结构
+
+```text
+.
+├── addon/              # 插件静态资源（manifest、bootstrap、UI、本地化）
+├── src/                # TypeScript 源码
+│   ├── modules/        # 业务模块（同步引擎、MCP 客户端、UI 等）
+│   └── utils/          # 工具函数（模板引擎、XML 辅助、偏好设置）
+├── test/               # 测试文件
+├── typings/            # TypeScript 类型声明
+└── zotero-plugin.config.ts
+```
+
+## 已知限制
+
+- 仅同步子笔记中的外部 `http/https` 图片；本地附件图、data URL 图片暂不支持。
+- API Key 以明文形式存储在 Zotero 偏好设置中（Zotero 插件的通行做法）。
+
+## 许可证
+
+MIT
+
 # Zotero Plugin Template
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)

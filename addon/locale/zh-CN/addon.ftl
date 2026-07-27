@@ -1,11 +1,6 @@
-startup-begin = 插件加载中
-startup-finish = 插件已就绪
-menuitem-label = 插件模板: 帮助工具样例
-menupopup-label = 插件模板: 弹出菜单
-menuitem-submenulabel = 插件模板：子菜单
-menuitem-filemenulabel = 插件模板: 文件菜单
-prefs-title = 插件模板
-prefs-table-title = 标题
-prefs-table-detail = 详情
-tabpanel-lib-tab-label = 库标签
-tabpanel-reader-tab-label = 阅读器标签
+sync-begin = 正在同步到 WPS 笔记…
+prefs-title = Zotero → WPS 笔记同步
+prefs-source = 项目源码
+menu-sync-to-wpsnote = 同步到 WPS 笔记
+menu-sync-history = WPS 同步历史
+sync-history-title = Zotero → WPS 笔记同步历史

@@ -1,131 +1,141 @@
 import { config } from "../../package.json";
-import { getString } from "../utils/locale";
+import { buildNoteTitle, buildNoteXml } from "../utils/xmlBuilder";
+import type { ZoteroItemData } from "../utils/xmlBuilder";
+import { getApiKey, setApiKey } from "../utils/prefs";
 
 export async function registerPrefsScripts(_window: Window) {
-  // This function is called when the prefs window is opened
-  // See addon/content/preferences.xhtml onpaneload
-  if (!addon.data.prefs) {
-    addon.data.prefs = {
-      window: _window,
-      columns: [
-        {
-          dataKey: "title",
-          label: getString("prefs-table-title"),
-          fixedWidth: true,
-          width: 100,
-        },
-        {
-          dataKey: "detail",
-          label: getString("prefs-table-detail"),
-        },
-      ],
-      rows: [
-        {
-          title: "Orange",
-          detail: "It's juicy",
-        },
-        {
-          title: "Banana",
-          detail: "It's sweet",
-        },
-        {
-          title: "Apple",
-          detail: "I mean the fruit APPLE",
-        },
-      ],
-    };
-  } else {
-    addon.data.prefs.window = _window;
-  }
-  updatePrefsUI();
+  addon.data.prefs = {
+    window: _window,
+  };
   bindPrefEvents();
+  refreshTemplatePreview();
 }
 
-async function updatePrefsUI() {
-  // You can initialize some UI elements on prefs window
-  // with addon.data.prefs.window.document
-  // Or bind some events to the elements
-  const renderLock = ztoolkit.getGlobal("Zotero").Promise.defer();
-  if (addon.data.prefs?.window == undefined) return;
-  const tableHelper = new ztoolkit.VirtualizedTable(addon.data.prefs?.window)
-    .setContainerId(`${config.addonRef}-table-container`)
-    .setProp({
-      id: `${config.addonRef}-prefs-table`,
-      // Do not use setLocale, as it modifies the Zotero.Intl.strings
-      // Set locales directly to columns
-      columns: addon.data.prefs?.columns,
-      showHeader: true,
-      multiSelect: true,
-      staticColumns: true,
-      disableFontSizeScaling: true,
-    })
-    .setProp("getRowCount", () => addon.data.prefs?.rows.length || 0)
-    .setProp(
-      "getRowData",
-      (index) =>
-        addon.data.prefs?.rows[index] || {
-          title: "no data",
-          detail: "no data",
-        },
-    )
-    // Show a progress window when selection changes
-    .setProp("onSelectionChange", (selection) => {
-      new ztoolkit.ProgressWindow(config.addonName)
-        .createLine({
-          text: `Selected line: ${addon.data.prefs?.rows
-            .filter((v, i) => selection.isSelected(i))
-            .map((row) => row.title)
-            .join(",")}`,
-          progress: 100,
-        })
-        .show();
-    })
-    // When pressing delete, delete selected line and refresh table.
-    // Returning false to prevent default event.
-    .setProp("onKeyDown", (event: KeyboardEvent) => {
-      if (event.key == "Delete" || (Zotero.isMac && event.key == "Backspace")) {
-        addon.data.prefs!.rows =
-          addon.data.prefs?.rows.filter(
-            (v, i) => !tableHelper.treeInstance.selection.isSelected(i),
-          ) || [];
-        tableHelper.render();
-        return false;
-      }
-      return true;
-    })
-    // For find-as-you-type
-    .setProp(
-      "getRowString",
-      (index) => addon.data.prefs?.rows[index].title || "",
-    )
-    // Render the table.
-    .render(-1, () => {
-      renderLock.resolve();
-    });
-  await renderLock.promise;
-  ztoolkit.log("Preference table rendered!");
+function createExampleItem(): ZoteroItemData {
+  return {
+    key: "EXAMPLE123",
+    title: "Example Paper Title: Zotero → WPS Notes Sync via MCP",
+    itemType: "journalArticle",
+    creators: ["Alice Zhang", "Bob Li"],
+    date: "2025-07-27",
+    year: "2025",
+    abstract:
+      "This is a sample abstract. The template engine supports variable substitution, conditionals, and loops, allowing you to customize the format synced to WPS Notes.",
+    url: "https://example.com/paper",
+    DOI: "10.1000/example",
+    publicationTitle: "Journal of Examples",
+    tags: ["Zotero", "WPS", "Sync"],
+    notes: [
+      {
+        title: "Reading Notes",
+        content:
+          '<p>This is a sample note.</p><p>Notes may also include images like <img src="https://example.com/image.png" alt="Example image" />.</p>',
+        images: [
+          {
+            src: "https://example.com/image.png",
+            alt: "Example image",
+          },
+        ],
+      },
+    ],
+    attachments: [
+      {
+        key: "ATTACH123",
+        title: "Example Paper.pdf",
+        contentType: "application/pdf",
+        isPDF: true,
+      },
+    ],
+    annotations: [
+      {
+        key: "ANNO1",
+        type: "highlight",
+        text: "This is an example highlight annotation text.",
+        comment: "This is a comment on the highlight.",
+        color: "#ffd400",
+        pageLabel: "1",
+        sortIndex: "00001",
+        authorName: "",
+        dateAdded: "2025-07-27",
+        dateModified: "2025-07-27",
+        tags: ["Important", "To Review"],
+      },
+      {
+        key: "ANNO2",
+        type: "note",
+        text: "",
+        comment: "This is a standalone note annotation.",
+        color: "#5fb236",
+        pageLabel: "2",
+        sortIndex: "00002",
+        authorName: "",
+        dateAdded: "2025-07-27",
+        dateModified: "2025-07-27",
+        tags: [],
+      },
+    ],
+  };
 }
 
 function bindPrefEvents() {
-  addon.data
-    .prefs!.window.document?.querySelector(
-      `#zotero-prefpane-${config.addonRef}-enable`,
-    )
-    ?.addEventListener("command", (e: Event) => {
-      ztoolkit.log(e);
-      addon.data.prefs!.window.alert(
-        `Successfully changed to ${(e.target as XUL.Checkbox).checked}!`,
-      );
-    });
+  const doc = addon.data.prefs?.window.document;
+  if (!doc) return;
 
-  addon.data
-    .prefs!.window.document?.querySelector(
-      `#zotero-prefpane-${config.addonRef}-input`,
-    )
-    ?.addEventListener("change", (e: Event) => {
-      ztoolkit.log(e);
-      addon.data.prefs!.window.alert(
-        `Successfully changed to ${(e.target as HTMLInputElement).value}!`,
-      );
+  const titleInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-titleTemplate`,
+  ) as HTMLTextAreaElement | null;
+  const bodyInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-bodyTemplate`,
+  ) as HTMLTextAreaElement | null;
+  const apiKeyInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-wpsMcpApiKey`,
+  ) as HTMLInputElement | null;
+
+  const refresh = () => refreshTemplatePreview();
+
+  titleInput?.addEventListener("input", refresh);
+  bodyInput?.addEventListener("input", refresh);
+
+  // API Key 需要手动读写，以便进行简单的混淆存储
+  if (apiKeyInput) {
+    apiKeyInput.value = getApiKey();
+    apiKeyInput.addEventListener("change", () => {
+      setApiKey(apiKeyInput.value);
     });
+  }
+
+  ztoolkit.log("Preference window loaded", config.addonRef);
+}
+
+function refreshTemplatePreview() {
+  const doc = addon.data.prefs?.window.document;
+  if (!doc) return;
+
+  const titleInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-titleTemplate`,
+  ) as HTMLTextAreaElement | null;
+  const bodyInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-bodyTemplate`,
+  ) as HTMLTextAreaElement | null;
+  const titlePreview = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-titlePreview`,
+  ) as HTMLTextAreaElement | null;
+  const bodyPreview = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-bodyPreview`,
+  ) as HTMLTextAreaElement | null;
+
+  if (!titlePreview || !bodyPreview) return;
+
+  const example = createExampleItem();
+  try {
+    titlePreview.value = buildNoteTitle(example, titleInput?.value || "");
+  } catch (e: any) {
+    titlePreview.value = `标题渲染错误：${e?.message || String(e)}`;
+  }
+
+  try {
+    bodyPreview.value = buildNoteXml(example, bodyInput?.value || "");
+  } catch (e: any) {
+    bodyPreview.value = `正文渲染错误：${e?.message || String(e)}`;
+  }
 }

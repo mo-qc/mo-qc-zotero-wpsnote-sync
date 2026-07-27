@@ -30,7 +30,7 @@ export default defineConfig({
       {
         entryPoints: ["src/index.ts"],
         define: {
-          __env__: `"${process.env.NODE_ENV}"`,
+          __env__: `"${process.env.NODE_ENV || "development"}"`,
         },
         bundle: true,
         target: "firefox115",
