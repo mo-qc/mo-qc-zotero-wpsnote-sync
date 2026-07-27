@@ -1,8 +1,15 @@
 pref-title = Zotero → WPS 笔记同步设置
-pref-wpsMcpEndpoint = MCP 端点
-pref-wpsMcpApiKey = API Key
+pref-mcpInterfaceType = MCP 接口类型
+pref-mcpInterfaceType-cloud = 云端 MCP
+pref-mcpInterfaceType-local = 本地 MCP
+pref-wpsMcpEndpoint = 云端 MCP 端点
+pref-wpsMcpApiKey = 云端 API Key
+pref-localMcpUrl = 本地 MCP URL
+pref-localMcpToken = 本地 MCP Token
 pref-defaultTags = 默认标签
 pref-updateExisting = 更新已存在的笔记
+pref-incrementalSync = 启用增量同步（跳过未变更文献）
+pref-promptOnConflict = 冲突时提示（文献变更后询问处理方式）
 pref-syncInclude-title = 同步内容
 pref-syncIncludeAbstract = 摘要
 pref-syncIncludeAttachments = 附件

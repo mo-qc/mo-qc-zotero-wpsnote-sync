@@ -18,6 +18,7 @@ import type {
   ZoteroAnnotation,
 } from "./xmlBuilder";
 import { escapeXml, paragraph, link } from "./xmlHelpers";
+import { markdownToWpsXml, splitMarkdownByTable } from "./markdown";
 
 export { getDefaultTitleTemplate, getDefaultBodyTemplate };
 
@@ -164,7 +165,7 @@ type TemplateNode =
 function tokenizeTemplate(template: string): TemplateNode[] {
   const tokens: TemplateNode[] = [];
   const regex =
-    /\{\{#each\s+([-\w.]+)\}\}|\{\{\/each\}\}|\{\{#if\s+([-\w.]+)\}\}|\{\{#unless\s+([-\w.]+)\}\}|\{\{else\}\}|\{\{\/if\}\}|\{\{\{([-\w.]+)\}\}\}|\{\{([-\w.]+)\}\}/g;
+    /\{\{#each\s+([-\w.]+)\}\}|\{\{\/each\}\}|\{\{#if\s+([-\w.]+)\}\}|\{\{#unless\s+([-\w.]+)\}\}|\{\{else\}\}|\{\{\/if\}\}|\{\{\/unless\}\}|\{\{\{([-\w.]+)\}\}\}|\{\{([-\w.]+)\}\}/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -188,6 +189,8 @@ function tokenizeTemplate(template: string): TemplateNode[] {
       tokens.push({ type: "text", value: "{{else}}" });
     } else if (match[0] === "{{/if}}") {
       tokens.push({ type: "text", value: "{{/if}}" });
+    } else if (match[0] === "{{/unless}}") {
+      tokens.push({ type: "text", value: "{{/unless}}" });
     } else if (match[4]) {
       tokens.push({ type: "var", path: match[4], raw: true });
     } else if (match[5]) {
@@ -240,10 +243,13 @@ function parseTemplate(tokens: TemplateNode[]): TemplateNode[] {
       }
       frame.inElse = true;
       frame.elseNodes = [];
-    } else if (token.type === "text" && token.value === "{{/if}}") {
+    } else if (
+      token.type === "text" &&
+      (token.value === "{{/if}}" || token.value === "{{/unless}}")
+    ) {
       const frame = stack.pop();
       if (!frame || frame.type !== "if") {
-        throw new Error("Unexpected {{/if}}");
+        throw new Error(`Unexpected ${token.value}`);
       }
       const block =
         stack[stack.length - 1].nodes[stack[stack.length - 1].nodes.length - 1];
@@ -363,37 +369,63 @@ export function renderItemTemplate(
     urlLink: item.url ? link(item.url, item.url) : "",
     abstractParagraph: item.abstract ? paragraph(item.abstract) : "",
     tagsJoined: item.tags.join(" · "),
-    annotations: item.annotations.map((a) => ({
-      ...a,
-      typeLabel: annotationTypeLabel(a.type),
-      textParagraph: a.text ? paragraph(a.text) : "",
-      commentParagraph: a.comment ? paragraph(a.comment) : "",
-      tagsJoined: a.tags.join(" · "),
-      tagsXml: a.tags.map(tagToXml).join(""),
-    })),
-    annotationGroups: groupAnnotationsByPage(item.annotations).map((g) => ({
-      pageLabel: g.pageLabel,
-      items: g.items.map((a) => ({
+    annotations: item.annotations.map((a) => {
+      const commentSplit = a.comment ? splitMarkdownByTable(a.comment) : null;
+      return {
         ...a,
         typeLabel: annotationTypeLabel(a.type),
         textParagraph: a.text ? paragraph(a.text) : "",
         commentParagraph: a.comment ? paragraph(a.comment) : "",
+        commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
+        commentHasTable: !!commentSplit?.table,
+        commentBeforeTableXml: commentSplit?.before || "",
+        commentTableXml: commentSplit?.table || "",
+        commentAfterTableXml: commentSplit?.after || "",
         tagsJoined: a.tags.join(" · "),
         tagsXml: a.tags.map(tagToXml).join(""),
-      })),
+      };
+    }),
+    annotationGroups: groupAnnotationsByPage(item.annotations).map((g) => ({
+      pageLabel: g.pageLabel,
+      items: g.items.map((a) => {
+        const commentSplit = a.comment ? splitMarkdownByTable(a.comment) : null;
+        return {
+          ...a,
+          typeLabel: annotationTypeLabel(a.type),
+          textParagraph: a.text ? paragraph(a.text) : "",
+          commentParagraph: a.comment ? paragraph(a.comment) : "",
+          commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
+          commentHasTable: !!commentSplit?.table,
+          commentBeforeTableXml: commentSplit?.before || "",
+          commentTableXml: commentSplit?.table || "",
+          commentAfterTableXml: commentSplit?.after || "",
+          tagsJoined: a.tags.join(" · "),
+          tagsXml: a.tags.map(tagToXml).join(""),
+        };
+      }),
     })),
     annotationGroupsByColor: groupAnnotationsByColor(item.annotations).map(
       (g) => ({
         color: g.color,
         colorName: g.colorName,
-        items: g.items.map((a) => ({
-          ...a,
-          typeLabel: annotationTypeLabel(a.type),
-          textParagraph: a.text ? paragraph(a.text) : "",
-          commentParagraph: a.comment ? paragraph(a.comment) : "",
-          tagsJoined: a.tags.join(" · "),
-          tagsXml: a.tags.map(tagToXml).join(""),
-        })),
+        items: g.items.map((a) => {
+          const commentSplit = a.comment
+            ? splitMarkdownByTable(a.comment)
+            : null;
+          return {
+            ...a,
+            typeLabel: annotationTypeLabel(a.type),
+            textParagraph: a.text ? paragraph(a.text) : "",
+            commentParagraph: a.comment ? paragraph(a.comment) : "",
+            commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
+            commentHasTable: !!commentSplit?.table,
+            commentBeforeTableXml: commentSplit?.before || "",
+            commentTableXml: commentSplit?.table || "",
+            commentAfterTableXml: commentSplit?.after || "",
+            tagsJoined: a.tags.join(" · "),
+            tagsXml: a.tags.map(tagToXml).join(""),
+          };
+        }),
       }),
     ),
   };
@@ -440,9 +472,10 @@ const DEFAULT_BODY_TEMPLATE_EN = `<h1>{{title}}</h1>
 <highlightBlock emoji="📝" highlightBlockBackgroundColor="#F3F6F8" highlightBlockBorderColor="#D1D9E0">
 <p><strong>[{{typeLabel}}]</strong></p>
 {{{textParagraph}}}
-{{#if comment}}<p><strong>Comment</strong></p>{{{commentParagraph}}}{{/if}}
+{{#if comment}}<p><strong>Comment</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
 {{#if tags}}<p><strong>Tags:</strong> {{{tagsXml}}}</p>{{/if}}
 </highlightBlock>
+{{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
 {{/each}}
 {{/each}}
 {{/if}}
@@ -488,9 +521,10 @@ const DEFAULT_BODY_TEMPLATE_ZH = `<h1>{{title}}</h1>
 <highlightBlock emoji="📝" highlightBlockBackgroundColor="#F3F6F8" highlightBlockBorderColor="#D1D9E0">
 <p><strong>[{{typeLabel}}]</strong></p>
 {{{textParagraph}}}
-{{#if comment}}<p><strong>批注</strong></p>{{{commentParagraph}}}{{/if}}
+{{#if comment}}<p><strong>批注</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
 {{#if tags}}<p><strong>标签：</strong>{{{tagsXml}}}</p>{{/if}}
 </highlightBlock>
+{{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
 {{/each}}
 {{/each}}
 {{/if}}

@@ -12,8 +12,11 @@ export interface SyncMappingEntry {
   noteUrl?: string;
   title?: string;
   lastSync: number;
+  itemModified?: string;
+  noteModified?: string;
   lastSuccess?: boolean;
   lastError?: string;
+  lastErrorType?: string;
 }
 
 export interface SyncMapping {
@@ -48,11 +51,21 @@ function saveMapping(mapping: SyncMapping): void {
   }
 }
 
+export function getMappedEntry(
+  itemKey: string,
+): SyncMappingEntry | undefined {
+  const mapping = loadMapping();
+  const entry = mapping[itemKey];
+  if (entry?.noteId) {
+    return entry;
+  }
+  return undefined;
+}
+
 export function getMappedNote(
   itemKey: string,
 ): { noteId: string; noteUrl: string } | undefined {
-  const mapping = loadMapping();
-  const entry = mapping[itemKey];
+  const entry = getMappedEntry(itemKey);
   if (entry?.noteId) {
     return { noteId: entry.noteId, noteUrl: entry.noteUrl || "" };
   }
@@ -66,7 +79,10 @@ export function recordSyncResult(
     title?: string;
     noteId?: string;
     noteUrl?: string;
+    itemModified?: string;
+    noteModified?: string;
     error?: string;
+    errorType?: string;
   },
 ): void {
   const mapping = loadMapping();
@@ -75,6 +91,7 @@ export function recordSyncResult(
     lastSync: Date.now(),
     lastSuccess: result.success,
     lastError: result.error,
+    lastErrorType: result.errorType,
   };
   if (result.title) {
     entry.title = result.title;
@@ -84,6 +101,12 @@ export function recordSyncResult(
   }
   if (result.noteUrl) {
     entry.noteUrl = result.noteUrl;
+  }
+  if (result.itemModified !== undefined) {
+    entry.itemModified = result.itemModified;
+  }
+  if (result.noteModified !== undefined) {
+    entry.noteModified = result.noteModified;
   }
   mapping[itemKey] = entry;
   saveMapping(mapping);

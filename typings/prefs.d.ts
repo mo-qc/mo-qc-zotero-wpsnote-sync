@@ -7,10 +7,15 @@
 declare namespace _ZoteroTypes {
   interface Prefs {
     PluginPrefsMap: {
+      "mcpInterfaceType": string;
       "wpsMcpEndpoint": string;
       "wpsMcpApiKey": string;
+      "localMcpUrl": string;
+      "localMcpToken": string;
       "defaultTags": string;
       "updateExisting": boolean;
+      "incrementalSync": boolean;
+      "promptOnConflict": boolean;
       "titleTemplate": string;
       "bodyTemplate": string;
       "syncMapping": string;

@@ -1,8 +1,15 @@
 pref-title = Zotero → WPS Notes Sync Settings
-pref-wpsMcpEndpoint = MCP Endpoint
-pref-wpsMcpApiKey = API Key
+pref-mcpInterfaceType = MCP Interface Type
+pref-mcpInterfaceType-cloud = Cloud MCP
+pref-mcpInterfaceType-local = Local MCP
+pref-wpsMcpEndpoint = Cloud MCP Endpoint
+pref-wpsMcpApiKey = Cloud API Key
+pref-localMcpUrl = Local MCP URL
+pref-localMcpToken = Local MCP Token
 pref-defaultTags = Default Tags
 pref-updateExisting = Update existing notes
+pref-incrementalSync = Enable incremental sync (skip unchanged items)
+pref-promptOnConflict = Prompt on conflict when item changed
 pref-syncInclude-title = Sync Content
 pref-syncIncludeAbstract = Abstract
 pref-syncIncludeAttachments = Attachments

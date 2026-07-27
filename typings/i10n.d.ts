@@ -3,6 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'menu-sync-collection-to-wpsnote'
   | 'menu-sync-history'
   | 'menu-sync-to-wpsnote'
   | 'pref-autoSyncEnabled'
@@ -13,6 +14,13 @@ export type FluentMessageId =
   | 'pref-bodyTemplate-help'
   | 'pref-defaultTags'
   | 'pref-help'
+  | 'pref-incrementalSync'
+  | 'pref-localMcpToken'
+  | 'pref-localMcpUrl'
+  | 'pref-mcpInterfaceType'
+  | 'pref-mcpInterfaceType-cloud'
+  | 'pref-mcpInterfaceType-local'
+  | 'pref-promptOnConflict'
   | 'pref-syncInclude-title'
   | 'pref-syncIncludeAbstract'
   | 'pref-syncIncludeAnnotations'

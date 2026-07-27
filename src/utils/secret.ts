@@ -6,23 +6,23 @@
 import { config } from "../../package.json";
 
 function xorWithKey(text: string, key: string): string {
-    let result = "";
-    for (let i = 0; i < text.length; i++) {
-        result += String.fromCharCode(
-            text.charCodeAt(i) ^ key.charCodeAt(i % key.length),
-        );
-    }
-    return result;
+  let result = "";
+  for (let i = 0; i < text.length; i++) {
+    result += String.fromCharCode(
+      text.charCodeAt(i) ^ key.charCodeAt(i % key.length),
+    );
+  }
+  return result;
 }
 
 export function encryptString(text: string): string {
-    return btoa(xorWithKey(text, config.addonID));
+  return btoa(xorWithKey(text, config.addonID));
 }
 
 export function decryptString(text: string): string | null {
-    try {
-        return xorWithKey(atob(text), config.addonID);
-    } catch {
-        return null;
-    }
+  try {
+    return xorWithKey(atob(text), config.addonID);
+  } catch {
+    return null;
+  }
 }

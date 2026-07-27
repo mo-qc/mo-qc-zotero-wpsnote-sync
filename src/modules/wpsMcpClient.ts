@@ -5,19 +5,49 @@
 
 export interface McpToolResult {
   // WPS 笔记 MCP 的工具直接返回业务 JSON，不统一包装 ok/code
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
+export interface McpJsonRpcEvent {
+  id?: number;
+  result?: unknown;
+  error?: { code: number | string; message: string };
+}
+
+export interface McpEnvelope<T = unknown> {
+  ok?: boolean;
+  code?: number | string;
+  message?: string;
+  data?: T;
+}
+
+export interface NoteBlock {
+  id: string;
+  type?: string;
+  content?: string;
+  children?: NoteBlock[];
+}
+
+export interface NoteOutline {
+  blocks?: NoteBlock[];
+}
+
+export type McpInterfaceType = "cloud" | "local";
+
 export interface McpClientOptions {
+  interfaceType?: McpInterfaceType;
   endpoint: string;
   apiKey: string;
   timeout?: number;
   retries?: number;
 }
 
-function parseMcpSseResponse(text: string, expectedId?: number | null): any {
+function parseMcpSseResponse(
+  text: string,
+  expectedId?: number | null,
+): McpJsonRpcEvent | undefined {
   // 简单 SSE 解析：按 event/message 块拆分，取 data: 行
-  const events: any[] = [];
+  const events: McpJsonRpcEvent[] = [];
   const lines = text.split(/\r?\n/);
   let currentData = "";
 
@@ -74,18 +104,55 @@ function parseMcpSseResponse(text: string, expectedId?: number | null): any {
 export class WpsMcpClient {
   private endpoint: string;
   private apiKey: string;
+  private interfaceType: McpInterfaceType;
   private timeout: number;
   private requestId = 0;
   private initialized = false;
   private initializingPromise: Promise<void> | null = null;
   private tools: string[] = [];
   private retries: number;
+  private sessionId?: string;
 
   constructor(options: McpClientOptions) {
     this.endpoint = options.endpoint;
     this.apiKey = options.apiKey;
+    this.interfaceType = options.interfaceType || "cloud";
     this.timeout = options.timeout || 60000;
     this.retries = options.retries ?? 2;
+  }
+
+  private buildHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (this.interfaceType === "local") {
+      // streamable_http 需要同时接受 JSON 与 SSE 响应，否则可能返回 406
+      headers["Accept"] = "application/json, text/event-stream";
+      headers["Authorization"] = `Bearer ${this.apiKey}`;
+      headers["API_KEY"] = this.apiKey;
+      if (this.sessionId) {
+        headers["Mcp-Session-Id"] = this.sessionId;
+      }
+    } else {
+      headers["X-API-Key"] = this.apiKey;
+    }
+    return headers;
+  }
+
+  private getResponseHeader(xhr: any, name: string): string | null {
+    if (!xhr || typeof xhr.getResponseHeader !== "function") return null;
+    // HTTP 头大小写不敏感，但 getResponseHeader 某些实现区分大小写
+    const variants = [name, name.toLowerCase(), name.toUpperCase()];
+    const capitalized = name
+      .split("-")
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+      .join("-");
+    variants.push(capitalized);
+    for (const v of variants) {
+      const value = xhr.getResponseHeader(v);
+      if (value) return value;
+    }
+    return null;
   }
 
   private nextId(): number {
@@ -112,10 +179,7 @@ export class WpsMcpClient {
 
     const xhr = await Zotero.HTTP.request("POST", this.endpoint, {
       body: JSON.stringify(body),
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": this.apiKey,
-      },
+      headers: this.buildHeaders(),
       timeout: this.timeout,
       successCodes: false, // 允许我们自行处理状态码
     });
@@ -129,6 +193,9 @@ export class WpsMcpClient {
 
     // WPS 笔记 MCP 使用 SSE 流返回，解析 data: 行
     const parsed = parseMcpSseResponse(text, id);
+    if (!parsed) {
+      throw new Error("MCP response is empty");
+    }
     if (parsed.error) {
       throw new Error(
         `MCP error ${parsed.error.code}: ${parsed.error.message}`,
@@ -140,9 +207,9 @@ export class WpsMcpClient {
 
   private async post(
     method: string,
-    params?: any,
+    params?: Record<string, unknown>,
     id?: number | null,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const maxRetries = this.retries;
     let lastError: Error | undefined;
 
@@ -179,10 +246,7 @@ export class WpsMcpClient {
     try {
       await Zotero.HTTP.request("POST", this.endpoint, {
         body: JSON.stringify(body),
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": this.apiKey,
-        },
+        headers: this.buildHeaders(),
         timeout: this.timeout,
         successCodes: false,
       });
@@ -201,9 +265,11 @@ export class WpsMcpClient {
 
     this.initializingPromise = (async () => {
       try {
-        const result = await this.post(
-          "initialize",
-          {
+        const initId = this.nextId();
+        const initBody = {
+          jsonrpc: "2.0",
+          method: "initialize",
+          params: {
             protocolVersion: "2024-11-05",
             capabilities: {
               tools: { listChanged: true },
@@ -213,22 +279,58 @@ export class WpsMcpClient {
               version: addon.data.config.version || "0.1.0",
             },
           },
-          this.nextId(),
-        );
+          id: initId,
+        };
 
-        ztoolkit.log("MCP initialized", result);
+        // initialize 需要直接访问原始 XHR，以读取 streamable_http 返回的 session ID
+        const xhr = await Zotero.HTTP.request("POST", this.endpoint, {
+          body: JSON.stringify(initBody),
+          headers: this.buildHeaders(),
+          timeout: this.timeout,
+          successCodes: false,
+        });
+
+        const text = xhr.responseText || "";
+        ztoolkit.log("MCP initialize response", xhr.status, text.slice(0, 800));
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          throw new Error(
+            `MCP initialize HTTP ${xhr.status}: ${text.slice(0, 200)}`,
+          );
+        }
+
+        const sessionId = this.getResponseHeader(xhr, "Mcp-Session-Id");
+        if (sessionId) {
+          this.sessionId = sessionId;
+          ztoolkit.log(
+            "MCP session ID acquired",
+            sessionId.slice(0, 8) + "...",
+          );
+        }
+
+        const parsed = parseMcpSseResponse(text, initId);
+        if (!parsed) {
+          throw new Error("MCP initialize response is empty");
+        }
+        if (parsed.error) {
+          throw new Error(
+            `MCP initialize error: ${JSON.stringify(parsed.error)}`,
+          );
+        }
+
+        ztoolkit.log("MCP initialized", parsed.result);
 
         // 发送 initialized 通知（无 id），notification 不应期待响应
         await this.sendNotification("notifications/initialized", undefined);
 
         // 拉取工具列表
-        const toolsResult = await this.post(
+        const toolsResult = (await this.post(
           "tools/list",
           undefined,
           this.nextId(),
-        );
+        )) as { tools?: { name?: string }[] };
         this.tools = (toolsResult?.tools || []).map(
-          (t: any) => t.name as string,
+          (t) => t.name as string,
         );
         ztoolkit.log("MCP tools", this.tools);
 
@@ -259,18 +361,27 @@ export class WpsMcpClient {
 
     // WPS 笔记 MCP 返回的 result 中，业务数据在 content[].text 的 JSON 里，
     // 新版同时提供 structuredContent；优先取 structuredContent，再解析 text。
-    if (result && typeof result === "object") {
+    // 本地 streamable_http 返回统一响应信封 { ok, code, data, ... }，需解包 data。
+    let parsed: unknown = result;
+    const resultObj =
+      result && typeof result === "object"
+        ? (result as {
+            structuredContent?: unknown;
+            content?: { type?: string; text?: string }[];
+          })
+        : undefined;
+    if (resultObj) {
       if (
-        result.structuredContent &&
-        typeof result.structuredContent === "object"
+        resultObj.structuredContent &&
+        typeof resultObj.structuredContent === "object"
       ) {
-        return result.structuredContent as McpToolResult;
-      }
-      if (Array.isArray(result.content)) {
-        for (const item of result.content) {
+        parsed = resultObj.structuredContent;
+      } else if (Array.isArray(resultObj.content)) {
+        for (const item of resultObj.content) {
           if (item.type === "text" && typeof item.text === "string") {
             try {
-              return JSON.parse(item.text) as McpToolResult;
+              parsed = JSON.parse(item.text);
+              break;
             } catch {
               return { text: item.text } as McpToolResult;
             }
@@ -279,7 +390,20 @@ export class WpsMcpClient {
       }
     }
 
-    return (result as McpToolResult) || {};
+    // 解包统一响应信封
+    if (parsed && typeof parsed === "object" && "ok" in parsed) {
+      const envelope = parsed as McpEnvelope;
+      if (envelope.ok === false) {
+        throw new Error(
+          `MCP tool error ${envelope.code || ""}: ${envelope.message || JSON.stringify(envelope)}`,
+        );
+      }
+      if (envelope.data !== undefined) {
+        parsed = envelope.data;
+      }
+    }
+
+    return (parsed as McpToolResult) || {};
   }
 
   async createNote(
@@ -300,8 +424,8 @@ export class WpsMcpClient {
     };
   }
 
-  async getNoteOutline(noteId: string): Promise<any> {
-    return this.callTool("get_note_outline", { note_id: noteId });
+  async getNoteOutline(noteId: string): Promise<NoteOutline> {
+    return this.callTool("get_note_outline", { note_id: noteId }) as Promise<NoteOutline>;
   }
 
   async editBlock(
@@ -332,12 +456,12 @@ export class WpsMcpClient {
   async replaceNoteContent(
     noteId: string,
     content: string,
-    outline?: any,
+    outline?: NoteOutline,
   ): Promise<McpToolResult> {
-    if (!outline) {
-      outline = await this.getNoteOutline(noteId);
-    }
-    const blocks = outline?.blocks || [];
+    const resolvedOutline = outline || (await this.getNoteOutline(noteId));
+    const blocks = Array.isArray(resolvedOutline?.blocks)
+      ? resolvedOutline.blocks
+      : [];
     if (!blocks.length) {
       throw new Error("无法获取笔记 block 列表");
     }
@@ -351,8 +475,12 @@ export class WpsMcpClient {
 
     const operations: any[] = [];
     const blockIdsToDelete = blocks.slice(1).map((b: any) => b.id);
-    if (blockIdsToDelete.length > 0) {
-      operations.push({ op: "delete", block_ids: blockIdsToDelete });
+    const DELETE_BATCH_SIZE = 50;
+    for (let i = 0; i < blockIdsToDelete.length; i += DELETE_BATCH_SIZE) {
+      operations.push({
+        op: "delete",
+        block_ids: blockIdsToDelete.slice(i, i + DELETE_BATCH_SIZE),
+      });
     }
     operations.push({ op: "replace", block_id: blocks[0].id, content });
 
@@ -363,15 +491,47 @@ export class WpsMcpClient {
     noteId: string,
     tagNames: string[],
   ): Promise<McpToolResult> {
-    return this.callTool("add_note_tags", {
-      note_id: noteId,
-      tag_names: tagNames,
-    });
+    await this.initialize();
+    if (this.hasTool("manage_note_tags")) {
+      return this.callTool("manage_note_tags", {
+        note_id: noteId,
+        add: tagNames,
+      });
+    }
+    if (this.hasTool("add_note_tags")) {
+      return this.callTool("add_note_tags", {
+        note_id: noteId,
+        tag_names: tagNames,
+      });
+    }
+    throw new Error(
+      "MCP server 未提供标签管理工具（manage_note_tags/add_note_tags）",
+    );
   }
 
-  async searchNotes(keyword: string, limit = 10): Promise<any[]> {
-    const res = await this.callTool("search_notes", { keyword, limit });
-    return res.items || res.data?.items || res.data || [];
+  async searchNotes(keyword: string, limit = 10): Promise<unknown[]> {
+    const isLocal = this.interfaceType === "local";
+    const args = isLocal
+      ? { keywords: [keyword], limit }
+      : { keyword, limit };
+    const res = await this.callTool("search_notes", args);
+    const resObj = res as {
+      notes?: unknown[];
+      items?: unknown[];
+      data?: {
+        notes?: unknown[];
+        items?: unknown[];
+      };
+    };
+    const candidates = isLocal
+      ? resObj.notes ||
+        resObj.items ||
+        resObj.data?.notes ||
+        resObj.data?.items ||
+        resObj.data ||
+        []
+      : resObj.items || resObj.data?.items || resObj.data || [];
+    return Array.isArray(candidates) ? candidates : [];
   }
 
   async insertImage(
@@ -388,10 +548,19 @@ export class WpsMcpClient {
       src,
       alt,
     });
+    const resObj = res as {
+      dimensions?: { width?: number; height?: number };
+      block_id?: string;
+      last_block_id?: string;
+    };
+    const dims = (resObj.dimensions || resObj) as {
+      width?: number;
+      height?: number;
+    };
     return {
-      block_id: res.block_id || res.last_block_id,
-      width: res.width,
-      height: res.height,
+      block_id: resObj.block_id || resObj.last_block_id,
+      width: dims.width,
+      height: dims.height,
     };
   }
 }

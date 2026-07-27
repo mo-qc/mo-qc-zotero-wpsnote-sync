@@ -2,25 +2,53 @@
  * Zotero → WPS 笔记同步引擎。
  */
 
-import { WpsMcpClient } from "./wpsMcpClient";
+import {
+  WpsMcpClient,
+  McpInterfaceType,
+  NoteOutline,
+} from "./wpsMcpClient";
 import {
   getSelectedItems,
+  getSelectedCollectionItems,
   extractItemData,
+  getAttachmentDataUrl,
+  getItemModifiedTime,
   ExtractOptions,
 } from "./zoteroItem";
-import { buildNoteTitle, buildNoteXml, ZoteroNote } from "../utils/xmlBuilder";
-import { getPref, getApiKey } from "../utils/prefs";
-import { getMappedNote, recordSyncResult } from "./syncMapping";
+import {
+  buildNoteTitle,
+  buildNoteXml,
+  ZoteroNote,
+  ZoteroNoteImage,
+} from "../utils/xmlBuilder";
+import { getPref, getApiKey, getLocalMcpToken } from "../utils/prefs";
+import {
+  getMappedEntry,
+  recordSyncResult,
+  removeMappedNote,
+  SyncMappingEntry,
+} from "./syncMapping";
+
+export type ConflictResolution = "overwrite" | "skip" | "create-copy";
 
 export interface SyncOptions {
+  interfaceType?: McpInterfaceType;
   endpoint?: string;
   apiKey?: string;
   addTags?: string[];
   updateExisting?: boolean;
+  incrementalSync?: boolean;
+  promptOnConflict?: boolean;
   titleTemplate?: string;
   bodyTemplate?: string;
   include?: ExtractOptions;
   onProgress?: (current: number, total: number, title: string) => void;
+  onConflict?: (
+    item: Zotero.Item,
+    title: string,
+    mapping: SyncMappingEntry,
+  ) => Promise<ConflictResolution>;
+  signal?: AbortSignal;
 }
 
 function getDefaultExtractOptions(): ExtractOptions {
@@ -40,6 +68,8 @@ function getDefaultExtractOptions(): ExtractOptions {
   };
 }
 
+export type SyncErrorType = "network" | "mcp" | "image" | "other";
+
 export interface SyncResult {
   success: boolean;
   itemKey: string;
@@ -47,12 +77,46 @@ export interface SyncResult {
   noteId?: string;
   noteUrl?: string;
   error?: string;
+  errorType?: SyncErrorType;
 }
 
-function collectExternalImages(notes: ZoteroNote[]) {
-  return notes.flatMap((note) =>
-    note.images.filter((img) => img.src && /^https?:\/\//i.test(img.src)),
-  );
+function collectSyncImages(notes: ZoteroNote[]) {
+  return notes.flatMap((note) => note.images);
+}
+
+async function resolveImageSrc(
+  img: ZoteroNoteImage,
+): Promise<string | undefined> {
+  if (img.dataUrl) return img.dataUrl;
+  const src = img.src;
+  if (!src && !img.attachmentKey) return undefined;
+  if (src && (/^https?:\/\//i.test(src) || src.startsWith("data:"))) {
+    return src;
+  }
+  if (img.attachmentKey) {
+    const dataUrl = getAttachmentDataUrl(img.attachmentKey);
+    if (dataUrl) return dataUrl;
+  }
+  return undefined;
+}
+
+function isValidWpsTag(tag: string): boolean {
+  if (!tag || !tag.trim()) return false;
+  // WPS 标签不能包含这些字符或 emoji
+  if (/[\\:*?"<>|]/g.test(tag)) return false;
+  // 简单 emoji 范围过滤（常见 BMP + 补充面 emoji）
+  if (/[\u{1F300}-\u{1F9FF}]/u.test(tag)) return false;
+  return true;
+}
+
+function sanitizeWpsTag(tag: string): string {
+  // 保留有效层级，每级截断至 20 字符，整体最多 10 级
+  return tag
+    .split("/")
+    .map((level) => level.trim().slice(0, 20))
+    .filter(Boolean)
+    .slice(0, 10)
+    .join("/");
 }
 
 async function syncNoteImages(
@@ -61,15 +125,26 @@ async function syncNoteImages(
   anchorId: string,
   notes: ZoteroNote[],
 ) {
-  const externalImages = collectExternalImages(notes);
-  if (!externalImages.length) return;
+  const noteImages = collectSyncImages(notes);
+  if (!noteImages.length) return;
+
+  const resolvedImages = (
+    await Promise.all(
+      noteImages.map(async (img) => {
+        const src = await resolveImageSrc(img);
+        return src ? { src, alt: img.alt || "Image" } : null;
+      }),
+    )
+  ).filter(Boolean) as { src: string; alt: string }[];
+
+  if (!resolvedImages.length) return;
 
   try {
     // 先插入一个标题块，作为图片分组的锚点
     const headingRes = await client.editBlock(noteId, "insert", {
       anchor_id: anchorId,
       position: "after",
-      content: "<h2>External Images</h2>",
+      content: "<h2>图片</h2>",
     });
     const imageAnchorId =
       (headingRes as any).last_block_id ||
@@ -78,18 +153,18 @@ async function syncNoteImages(
 
     // 并行插入图片，提高同步速度。顺序由 WPS 服务端决定，基本保持原序。
     await Promise.all(
-      externalImages.map(async (img) => {
+      resolvedImages.map(async (img) => {
         try {
           await client.insertImage(
             noteId,
             imageAnchorId,
-            img.src!,
-            img.alt || "Image",
+            img.src,
+            img.alt,
           );
         } catch (e: any) {
           ztoolkit.log(
             "Sync single image failed",
-            img.src,
+            img.src.slice(0, 120),
             e?.message || String(e),
           );
         }
@@ -101,16 +176,88 @@ async function syncNoteImages(
 }
 
 function getClient(options?: SyncOptions): WpsMcpClient {
-  const endpoint =
-    options?.endpoint ||
-    String(getPref("wpsMcpEndpoint") || "https://ainote.kdocs.cn/mcp-svc/mcp");
-  const apiKey = options?.apiKey || getApiKey();
+  const interfaceType =
+    options?.interfaceType ||
+    (String(getPref("mcpInterfaceType") || "cloud") as McpInterfaceType);
 
-  if (!apiKey) {
-    throw new Error("未配置 WPS 笔记 MCP API Key，请在插件首选项中设置。");
+  let endpoint: string;
+  let apiKey: string;
+
+  if (interfaceType === "local") {
+    endpoint =
+      options?.endpoint ||
+      String(getPref("localMcpUrl") || "http://127.0.0.1:18930/mcp");
+    apiKey = options?.apiKey || getLocalMcpToken();
+  } else {
+    endpoint =
+      options?.endpoint ||
+      String(
+        getPref("wpsMcpEndpoint") || "https://ainote.kdocs.cn/mcp-svc/mcp",
+      );
+    apiKey = options?.apiKey || getApiKey();
   }
 
-  return new WpsMcpClient({ endpoint, apiKey });
+  if (!apiKey) {
+    const label = interfaceType === "local" ? "本地 MCP Token" : "云端 API Key";
+    throw new Error(`未配置 WPS 笔记 ${label}，请在插件首选项中设置。`);
+  }
+
+  return new WpsMcpClient({ interfaceType, endpoint, apiKey });
+}
+
+function isMappingInvalidError(err: any): boolean {
+  const msg = String(err?.message || "").toLowerCase();
+  const patterns = [
+    "note not found",
+    "笔记不存在",
+    "note 不存在",
+    "invalid note_id",
+    "note_id 无效",
+    "已删除",
+    "deleted",
+  ];
+  return patterns.some((p) => msg.includes(p));
+}
+
+function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error("同步已取消");
+  }
+}
+
+function classifyError(err: any): SyncErrorType {
+  const msg = String(err?.message || "").toLowerCase();
+  if (
+    msg.includes("network") ||
+    msg.includes("timeout") ||
+    msg.includes("abort") ||
+    msg.includes("offline") ||
+    msg.includes("connection") ||
+    msg.includes("enet") ||
+    msg.includes("econnrefused") ||
+    msg.includes("无法连接") ||
+    msg.includes("连接超时")
+  ) {
+    return "network";
+  }
+  if (
+    msg.includes("mcp error") ||
+    msg.includes("mcp") ||
+    msg.includes("未配置") ||
+    msg.includes("未提供") ||
+    msg.includes("未返回") ||
+    msg.includes("api key") ||
+    msg.includes("token") ||
+    msg.includes("认证") ||
+    msg.includes("鉴权") ||
+    msg.includes("unauthorized")
+  ) {
+    return "mcp";
+  }
+  if (msg.includes("image") || msg.includes("图片") || msg.includes("insert_image")) {
+    return "image";
+  }
+  return "other";
 }
 
 export async function syncItem(
@@ -133,7 +280,10 @@ export async function syncItem(
     title: data.title,
   };
 
+  const itemModified = getItemModifiedTime(item);
+
   try {
+    checkCancelled(options?.signal);
     const client = getClient(options);
     let noteId: string | undefined;
     let noteUrl: string | undefined;
@@ -142,7 +292,66 @@ export async function syncItem(
     // 1. 优先使用本地映射表
     const updateExisting =
       options?.updateExisting ?? Boolean(getPref("updateExisting"));
-    const mapped = updateExisting ? getMappedNote(item.key) : undefined;
+    let mappedEntry = updateExisting ? getMappedEntry(item.key) : undefined;
+    let mapped = mappedEntry
+      ? { noteId: mappedEntry.noteId!, noteUrl: mappedEntry.noteUrl || "" }
+      : undefined;
+
+    // 增量同步：文献未变更且上次同步成功，则直接跳过
+    const incrementalSync =
+      options?.incrementalSync ?? Boolean(getPref("incrementalSync"));
+    if (
+      incrementalSync &&
+      mappedEntry?.lastSuccess &&
+      mappedEntry.itemModified &&
+      mappedEntry.itemModified === itemModified
+    ) {
+      ztoolkit.log("Incremental sync: skip unchanged item", item.key);
+      result.success = true;
+      result.noteId = mappedEntry.noteId;
+      result.noteUrl = mappedEntry.noteUrl;
+      recordSyncResult(item.key, {
+        success: true,
+        title: data.title,
+        noteId: mappedEntry.noteId,
+        noteUrl: mappedEntry.noteUrl,
+        itemModified,
+      });
+      return result;
+    }
+
+    // 冲突检测：映射存在且 Zotero 侧文献已修改
+    const promptOnConflict =
+      options?.promptOnConflict ?? Boolean(getPref("promptOnConflict"));
+    if (
+      mappedEntry?.lastSuccess &&
+      mappedEntry.itemModified &&
+      mappedEntry.itemModified !== itemModified
+    ) {
+      if (promptOnConflict && options?.onConflict) {
+        const resolution = await options.onConflict(item, data.title, mappedEntry);
+        if (resolution === "skip") {
+          result.success = true;
+          result.noteId = mappedEntry.noteId;
+          result.noteUrl = mappedEntry.noteUrl;
+          recordSyncResult(item.key, {
+            success: true,
+            title: data.title,
+            noteId: mappedEntry.noteId,
+            noteUrl: mappedEntry.noteUrl,
+            itemModified: mappedEntry.itemModified,
+          });
+          return result;
+        }
+        if (resolution === "create-copy") {
+          noteId = undefined;
+          noteUrl = undefined;
+          mapped = undefined;
+          mappedEntry = undefined;
+        }
+      }
+    }
+
     if (mapped) {
       noteId = mapped.noteId;
       noteUrl = mapped.noteUrl;
@@ -152,11 +361,11 @@ export async function syncItem(
     if (!noteId && updateExisting) {
       const existing = await client.searchNotes(`[Zotero] ${data.title}`, 5);
       const match = existing.find(
-        (n: any) =>
-          String(n.title || "").includes(data.title) ||
-          String(n.title || "").includes(item.key),
-      );
-      if (match) {
+        (n) =>
+          String((n as { title?: string }).title || "").includes(data.title) ||
+          String((n as { title?: string }).title || "").includes(item.key),
+      ) as { note_id?: string; title?: string } | undefined;
+      if (match?.note_id) {
         noteId = match.note_id;
       }
     }
@@ -169,12 +378,30 @@ export async function syncItem(
       wasCreated = true;
     }
 
-    // 获取笔记大纲
-    const outline = await client.getNoteOutline(noteId);
+    // 获取笔记大纲；若本地映射失效（笔记被删除/不存在），自动重建
+    let outline: NoteOutline;
+    try {
+      outline = await client.getNoteOutline(noteId);
+    } catch (err: any) {
+      if (mapped && isMappingInvalidError(err)) {
+        ztoolkit.log("Mapped note invalid, recreating", item.key, noteId);
+        removeMappedNote(item.key);
+        const created = await client.createNote(title);
+        noteId = created.noteId;
+        noteUrl = created.noteUrl;
+        wasCreated = true;
+        outline = await client.getNoteOutline(noteId);
+      } else {
+        throw err;
+      }
+    }
+
     const firstBlockId = outline?.blocks?.[0]?.id;
     if (!firstBlockId) {
       throw new Error("无法获取笔记初始 block_id");
     }
+
+    checkCancelled(options?.signal);
 
     // 写入/覆盖内容：
     // - 如果是新建笔记（只有 1 个初始 block），直接替换首段；
@@ -188,14 +415,14 @@ export async function syncItem(
       await client.replaceNoteContent(noteId, xml, outline);
     }
 
-    // 同步 Zotero 笔记中的外网图片（本地/内嵌图片暂无法直接上传到 WPS）
+    // 同步 Zotero 笔记中的图片（外网 URL、内嵌 data URL、本地附件转 base64）
     await syncNoteImages(client, noteId, firstBlockId, data.notes);
 
-    // 同步标签
-    const tagsToAdd = [...data.tags];
-    if (options?.addTags?.length) {
-      tagsToAdd.push(...options.addTags);
-    }
+    // 同步标签（清理非法字符、emoji、超长层级）
+    const tagsToAdd = [...data.tags, ...(options?.addTags || [])]
+      .filter(isValidWpsTag)
+      .map(sanitizeWpsTag)
+      .filter(Boolean);
     if (tagsToAdd.length) {
       await client.addNoteTags(noteId, tagsToAdd);
     }
@@ -208,7 +435,8 @@ export async function syncItem(
     result.noteUrl = finalUrl;
   } catch (err: any) {
     result.error = err?.message || String(err);
-    ztoolkit.log("Sync failed", item.key, result.error);
+    result.errorType = classifyError(err);
+    ztoolkit.log("Sync failed", item.key, result.errorType, result.error);
   }
 
   recordSyncResult(item.key, {
@@ -216,7 +444,9 @@ export async function syncItem(
     title: data.title,
     noteId: result.noteId,
     noteUrl: result.noteUrl,
+    itemModified,
     error: result.error,
+    errorType: result.errorType,
   });
 
   return result;
@@ -225,16 +455,24 @@ export async function syncItem(
 export async function syncSelectedItems(
   options?: SyncOptions,
 ): Promise<SyncResult[]> {
-  const items = getSelectedItems().filter(
+  let items = getSelectedItems().filter(
     (item) => item.isRegularItem && item.isRegularItem(),
   );
+  // 未选中条目时，尝试同步当前选中的集合/文件夹
   if (!items.length) {
-    throw new Error("请先在 Zotero 中选择至少一条文献条目。");
+    items = getSelectedCollectionItems();
+  }
+  if (!items.length) {
+    throw new Error("请先在 Zotero 中选择至少一条文献条目或一个文件夹。");
   }
 
   const results: SyncResult[] = [];
   const total = items.length;
   for (let i = 0; i < total; i++) {
+    if (options?.signal?.aborted) {
+      ztoolkit.log("Sync cancelled by user");
+      break;
+    }
     const item = items[i];
     options?.onProgress?.(i + 1, total, String(item.getField("title") || ""));
     const res = await syncItem(item, options);

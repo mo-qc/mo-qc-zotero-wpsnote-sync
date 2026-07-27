@@ -11,6 +11,7 @@ import {
 } from "./template";
 
 export { escapeXml, paragraph, normalizeForXml, link } from "./xmlHelpers";
+export { markdownToWpsXml, splitMarkdownByTable } from "./markdown";
 
 export interface ZoteroNoteImage {
   src?: string;

@@ -53,3 +53,21 @@ export function setApiKey(value: string): void {
   const trimmed = value.trim();
   setPref("wpsMcpApiKey", trimmed ? encryptString(trimmed) : "");
 }
+
+/**
+ * Read the local WPS MCP token, transparently handling legacy plaintext values.
+ */
+export function getLocalMcpToken(): string {
+  const raw = String(getPref("localMcpToken") || "");
+  if (!raw) return "";
+  const decrypted = decryptString(raw);
+  return decrypted !== null ? decrypted : raw;
+}
+
+/**
+ * Save the local WPS MCP token using simple obfuscation.
+ */
+export function setLocalMcpToken(value: string): void {
+  const trimmed = value.trim();
+  setPref("localMcpToken", trimmed ? encryptString(trimmed) : "");
+}

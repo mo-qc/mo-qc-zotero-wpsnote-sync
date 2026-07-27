@@ -1,7 +1,12 @@
 import { config } from "../../package.json";
 import { buildNoteTitle, buildNoteXml } from "../utils/xmlBuilder";
 import type { ZoteroItemData } from "../utils/xmlBuilder";
-import { getApiKey, setApiKey } from "../utils/prefs";
+import {
+  getApiKey,
+  setApiKey,
+  getLocalMcpToken,
+  setLocalMcpToken,
+} from "../utils/prefs";
 
 export async function registerPrefsScripts(_window: Window) {
   addon.data.prefs = {
@@ -77,6 +82,34 @@ function createExampleItem(): ZoteroItemData {
   };
 }
 
+function getElement<T extends HTMLElement>(id: string): T | null {
+  const doc = addon.data.prefs?.window.document;
+  if (!doc) return null;
+  return doc.getElementById(id) as T | null;
+}
+
+function updateInterfaceTypeVisibility() {
+  const typeSelect = getElement<HTMLSelectElement>(
+    `zotero-prefpane-${config.addonRef}-mcpInterfaceType`,
+  );
+  const cloudBox = getElement<HTMLElement>(
+    `zotero-prefpane-${config.addonRef}-cloud-config`,
+  );
+  const localBox = getElement<HTMLElement>(
+    `zotero-prefpane-${config.addonRef}-local-config`,
+  );
+  if (!typeSelect || !cloudBox || !localBox) return;
+
+  const isLocal = typeSelect.value === "local";
+  if (isLocal) {
+    cloudBox.setAttribute("hidden", "true");
+    localBox.removeAttribute("hidden");
+  } else {
+    localBox.setAttribute("hidden", "true");
+    cloudBox.removeAttribute("hidden");
+  }
+}
+
 function bindPrefEvents() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
@@ -90,17 +123,40 @@ function bindPrefEvents() {
   const apiKeyInput = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-wpsMcpApiKey`,
   ) as HTMLInputElement | null;
+  const localTokenInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-localMcpToken`,
+  ) as HTMLInputElement | null;
+  const typeSelect = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpInterfaceType`,
+  ) as HTMLSelectElement | null;
 
   const refresh = () => refreshTemplatePreview();
 
   titleInput?.addEventListener("input", refresh);
   bodyInput?.addEventListener("input", refresh);
 
-  // API Key 需要手动读写，以便进行简单的混淆存储
+  // 云端 API Key 需要手动读写，以便进行简单的混淆存储
   if (apiKeyInput) {
     apiKeyInput.value = getApiKey();
     apiKeyInput.addEventListener("change", () => {
       setApiKey(apiKeyInput.value);
+    });
+  }
+
+  // 本地 MCP Token 同样需要简单混淆存储
+  if (localTokenInput) {
+    localTokenInput.value = getLocalMcpToken();
+    localTokenInput.addEventListener("change", () => {
+      setLocalMcpToken(localTokenInput.value);
+    });
+  }
+
+  // 接口类型切换时动态显隐对应配置区域
+  if (typeSelect) {
+    updateInterfaceTypeVisibility();
+    typeSelect.addEventListener("change", () => {
+      updateInterfaceTypeVisibility();
+      refresh();
     });
   }
 

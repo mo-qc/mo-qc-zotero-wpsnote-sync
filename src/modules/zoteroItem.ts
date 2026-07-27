@@ -49,6 +49,26 @@ function getAttachmentPath(attachment: Zotero.Item): string | undefined {
   }
 }
 
+export function getAttachmentDataUrl(attachmentKey: string): string | undefined {
+  try {
+    const att = Zotero.Items.get(attachmentKey);
+    if (!att || !att.isAttachment() || !att.isImageAttachment()) {
+      return undefined;
+    }
+    const path = att.getFilePath();
+    if (!path) return undefined;
+    const contentType = att.attachmentContentType || "image/png";
+    return Zotero.File.generateDataURI(path, contentType);
+  } catch (e: any) {
+    ztoolkit.log(
+      "Generate attachment data URI failed",
+      attachmentKey,
+      e?.message || String(e),
+    );
+    return undefined;
+  }
+}
+
 function normalizeAnnotationText(html?: string): string {
   if (!html) return "";
   return String(html)
@@ -186,10 +206,36 @@ function extractAnnotations(item: Zotero.Item): ZoteroAnnotation[] {
   return annotations;
 }
 
+export function getItemModifiedTime(item: Zotero.Item): string {
+  try {
+    const raw = item.getField("dateModified");
+    if (!raw) return "";
+    const d = new Date(String(raw));
+    if (isNaN(d.getTime())) return String(raw);
+    return d.toISOString();
+  } catch {
+    return "";
+  }
+}
+
 export function getSelectedItems(): Zotero.Item[] {
   const zoteroPane = Zotero.getActiveZoteroPane();
   if (!zoteroPane) return [];
   return (zoteroPane.getSelectedItems?.() || []) as Zotero.Item[];
+}
+
+export function getSelectedCollectionItems(): Zotero.Item[] {
+  const zoteroPane = Zotero.getActiveZoteroPane();
+  if (!zoteroPane) return [];
+  const collection = zoteroPane.getSelectedCollection?.();
+  if (!collection) return [];
+  try {
+    return (collection.getChildItems?.() || []).filter((item: Zotero.Item) =>
+      item.isRegularItem?.(),
+    );
+  } catch {
+    return [];
+  }
 }
 
 export interface ExtractOptions {
