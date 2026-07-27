@@ -2,7 +2,7 @@
   "name": "zotero-wpsnote-sync",
   "type": "module",
   "version": "0.1.1",
-  "description": "Sync Zotero items, notes and PDF links to WPS Notes via MCP",
+  "description": "Sync Zotero items, notes, PDF links and annotations to WPS Notes via MCP",
   "config": {
     "addonName": "Zotero → WPS 笔记同步",
     "addonID": "zoterowpsnotesync@example.com",
@@ -13,14 +13,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mo-qc/zotero-wpsnote-sync.git"
+    "url": "git+https://github.com/mo-qc/mo-qc-zotero-wpsnote-sync.git"
   },
   "author": "mo-qc",
   "bugs": {
-    "url": "https://github.com/mo-qc/zotero-wpsnote-sync/issues"
+    "url": "https://github.com/mo-qc/mo-qc-zotero-wpsnote-sync/issues"
   },
-  "homepage": "https://github.com/mo-qc/zotero-wpsnote-sync#readme",
-  "license": "MIT",
+  "homepage": "https://github.com/mo-qc/mo-qc-zotero-wpsnote-sync#readme",
+  "license": "AGPL-3.0",
   "scripts": {
     "start": "zotero-plugin serve",
     "build": "zotero-plugin build && tsc --noEmit",
