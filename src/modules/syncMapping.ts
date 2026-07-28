@@ -51,9 +51,7 @@ function saveMapping(mapping: SyncMapping): void {
   }
 }
 
-export function getMappedEntry(
-  itemKey: string,
-): SyncMappingEntry | undefined {
+export function getMappedEntry(itemKey: string): SyncMappingEntry | undefined {
   const mapping = loadMapping();
   const entry = mapping[itemKey];
   if (entry?.noteId) {

@@ -16,12 +16,8 @@ const storage: Record<string, any> = {};
   log: () => {},
 };
 
-const {
-  recordSyncResult,
-  getMappedEntry,
-  getAllMappings,
-  removeMappedNote,
-} = await import("../src/modules/syncMapping");
+const { recordSyncResult, getMappedEntry, getAllMappings, removeMappedNote } =
+  await import("../src/modules/syncMapping");
 
 describe("syncMapping", function () {
   beforeEach(function () {

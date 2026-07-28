@@ -1,3 +1,7 @@
-.makeItRed {
-  background-color: tomato;
-}
+/**
+ * Zotero → WPS 笔记同步
+ * 主窗口注入样式
+ *
+ * 插件 UI 主要使用内联样式与 XHTML 嵌入式 CSS，
+ * 本文件保留为 Zotero 主窗口级别的样式扩展入口。
+ */

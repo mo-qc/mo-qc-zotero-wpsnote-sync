@@ -1,12 +1,15 @@
 import { expect } from "chai";
-import { escapeXml, link, normalizeForXml, paragraph } from "../src/utils/xmlHelpers";
+import {
+  escapeXml,
+  link,
+  normalizeForXml,
+  paragraph,
+} from "../src/utils/xmlHelpers";
 
 describe("xmlHelpers", function () {
   describe("escapeXml", function () {
     it("escapes XML special characters", function () {
-      expect(escapeXml("<>&\"'")).to.equal(
-        "&lt;&gt;&amp;&quot;&apos;",
-      );
+      expect(escapeXml("<>&\"'")).to.equal("&lt;&gt;&amp;&quot;&apos;");
     });
   });
 
@@ -32,9 +35,7 @@ describe("xmlHelpers", function () {
 
   describe("paragraph", function () {
     it("wraps text in paragraphs", function () {
-      expect(paragraph("line1\nline2")).to.equal(
-        "<p>line1</p><p>line2</p>",
-      );
+      expect(paragraph("line1\nline2")).to.equal("<p>line1</p><p>line2</p>");
     });
 
     it("escapes content", function () {

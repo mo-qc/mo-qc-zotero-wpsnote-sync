@@ -1,0 +1,73 @@
+{
+  "data": [
+    {
+      "id": "page-settings",
+      "title": "设置面板",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1750992000000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-history",
+      "title": "同步历史",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1750992000000,
+      "canvasData": {
+        "x": 620,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/history.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-conflict",
+      "title": "冲突处理",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1750992000000,
+      "canvasData": {
+        "x": 1240,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/conflict.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-progress",
+      "title": "进度提示与菜单",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1750992000000,
+      "canvasData": {
+        "x": 1860,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/progress.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "Zotero WPS 笔记同步 UI 设计稿"
+  }
+}

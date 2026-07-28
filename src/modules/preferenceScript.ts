@@ -102,11 +102,11 @@ function updateInterfaceTypeVisibility() {
 
   const isLocal = typeSelect.value === "local";
   if (isLocal) {
-    cloudBox.setAttribute("hidden", "true");
-    localBox.removeAttribute("hidden");
+    cloudBox.classList.add("zws-hidden");
+    localBox.classList.remove("zws-hidden");
   } else {
-    localBox.setAttribute("hidden", "true");
-    cloudBox.removeAttribute("hidden");
+    localBox.classList.add("zws-hidden");
+    cloudBox.classList.remove("zws-hidden");
   }
 }
 

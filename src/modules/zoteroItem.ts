@@ -49,7 +49,9 @@ function getAttachmentPath(attachment: Zotero.Item): string | undefined {
   }
 }
 
-export function getAttachmentDataUrl(attachmentKey: string): string | undefined {
+export function getAttachmentDataUrl(
+  attachmentKey: string,
+): string | undefined {
   try {
     const att = Zotero.Items.get(attachmentKey);
     if (!att || !att.isAttachment() || !att.isImageAttachment()) {

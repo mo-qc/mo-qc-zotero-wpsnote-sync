@@ -132,7 +132,10 @@ function renderList(
   return { xml: `<${tag}>${items.join("")}</${tag}>`, nextIndex: i };
 }
 
-function renderBlockLatex(lines: string[], startIndex: number): { xml: string; nextIndex: number } {
+function renderBlockLatex(
+  lines: string[],
+  startIndex: number,
+): { xml: string; nextIndex: number } {
   const line = lines[startIndex].trim();
   // $$...$$ 单行或跨行
   if (line.startsWith("$$") && line.endsWith("$$") && line.length > 4) {

@@ -2,11 +2,7 @@
  * Zotero → WPS 笔记同步引擎。
  */
 
-import {
-  WpsMcpClient,
-  McpInterfaceType,
-  NoteOutline,
-} from "./wpsMcpClient";
+import { WpsMcpClient, McpInterfaceType, NoteOutline } from "./wpsMcpClient";
 import {
   getSelectedItems,
   getSelectedCollectionItems,
@@ -155,12 +151,7 @@ async function syncNoteImages(
     await Promise.all(
       resolvedImages.map(async (img) => {
         try {
-          await client.insertImage(
-            noteId,
-            imageAnchorId,
-            img.src,
-            img.alt,
-          );
+          await client.insertImage(noteId, imageAnchorId, img.src, img.alt);
         } catch (e: any) {
           ztoolkit.log(
             "Sync single image failed",
@@ -254,7 +245,11 @@ function classifyError(err: any): SyncErrorType {
   ) {
     return "mcp";
   }
-  if (msg.includes("image") || msg.includes("图片") || msg.includes("insert_image")) {
+  if (
+    msg.includes("image") ||
+    msg.includes("图片") ||
+    msg.includes("insert_image")
+  ) {
     return "image";
   }
   return "other";
@@ -329,7 +324,11 @@ export async function syncItem(
       mappedEntry.itemModified !== itemModified
     ) {
       if (promptOnConflict && options?.onConflict) {
-        const resolution = await options.onConflict(item, data.title, mappedEntry);
+        const resolution = await options.onConflict(
+          item,
+          data.title,
+          mappedEntry,
+        );
         if (resolution === "skip") {
           result.success = true;
           result.noteId = mappedEntry.noteId;

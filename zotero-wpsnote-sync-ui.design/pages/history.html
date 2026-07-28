@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="zh-CN" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>同步历史 - Zotero → WPS 笔记同步</title>
+    <style id="theme-vars">
+      /* Zotero → WPS 笔记同步 - 现代简约设计系统 */
+
+      :root {
+        /* Brand */
+        --zws-primary: #2563eb;
+        --zws-primary-hover: #1d4ed8;
+        --zws-primary-subtle: #eff6ff;
+        --zws-primary-ring: rgba(37, 99, 235, 0.25);
+
+        /* Neutral */
+        --zws-bg: #ffffff;
+        --zws-card: var(--zws-bg);
+        --zws-surface: #f8fafc;
+        --zws-surface-hover: #f1f5f9;
+        --zws-border: #e2e8f0;
+        --zws-border-strong: #cbd5e1;
+
+        /* Text */
+        --zws-text: #0f172a;
+        --zws-foreground: var(--zws-text);
+        --zws-text-secondary: #475569;
+        --zws-text-muted: #64748b;
+        --zws-muted: var(--zws-text-muted);
+        --zws-text-placeholder: #94a3b8;
+
+        /* Status */
+        --zws-success: #10b981;
+        --zws-success-subtle: #ecfdf5;
+        --zws-error: #ef4444;
+        --zws-error-subtle: #fef2f2;
+        --zws-warning: #f59e0b;
+        --zws-warning-subtle: #fffbeb;
+
+        /* Radius */
+        --zws-radius-sm: 6px;
+        --zws-radius-md: 10px;
+        --zws-radius-lg: 14px;
+        --zws-radius-xl: 18px;
+
+        /* Shadows */
+        --zws-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+        --zws-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+        --zws-shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+        /* Spacing */
+        --zws-gap-xs: 4px;
+        --zws-gap-sm: 8px;
+        --zws-gap-md: 16px;
+        --zws-gap-lg: 24px;
+        --zws-gap-xl: 32px;
+
+        /* Typography */
+        --zws-font:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+        --zws-font-mono:
+          "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+          "PingFang SC", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: var(--zws-font);
+        color: var(--zws-text);
+        background: var(--zws-bg);
+        line-height: 1.5;
+        margin: 0;
+      }
+
+      .zws-card {
+        background: var(--zws-bg);
+        border: 1px solid var(--zws-border);
+        border-radius: var(--zws-radius-lg);
+        box-shadow: var(--zws-shadow-sm);
+        padding: var(--zws-gap-lg);
+      }
+
+      .zws-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--zws-text);
+        margin: 0 0 var(--zws-gap-md) 0;
+        padding-bottom: var(--zws-gap-sm);
+        border-bottom: 1px solid var(--zws-border);
+      }
+
+      .zws-form-row {
+        display: flex;
+        align-items: center;
+        gap: var(--zws-gap-md);
+        margin-bottom: var(--zws-gap-md);
+      }
+
+      .zws-form-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .zws-label {
+        min-width: 120px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--zws-text-secondary);
+        flex-shrink: 0;
+      }
+
+      .zws-input,
+      .zws-select,
+      .zws-textarea {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--zws-font);
+        font-size: 13px;
+        padding: 8px 12px;
+        color: var(--zws-text);
+        background: var(--zws-bg);
+        border: 1px solid var(--zws-border-strong);
+        border-radius: var(--zws-radius-md);
+        outline: none;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+
+      .zws-input:hover,
+      .zws-select:hover,
+      .zws-textarea:hover {
+        border-color: var(--zws-border-strong);
+      }
+
+      .zws-input:focus,
+      .zws-select:focus,
+      .zws-textarea:focus {
+        border-color: var(--zws-primary);
+        box-shadow: 0 0 0 3px var(--zws-primary-ring);
+      }
+
+      .zws-textarea {
+        resize: vertical;
+        line-height: 1.6;
+      }
+
+      .zws-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: var(--zws-gap-sm);
+        margin-bottom: var(--zws-gap-sm);
+        font-size: 13px;
+        color: var(--zws-text-secondary);
+        cursor: pointer;
+      }
+
+      .zws-checkbox-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--zws-primary);
+        cursor: pointer;
+      }
+
+      .zws-help-text {
+        font-size: 12px;
+        color: var(--zws-text-muted);
+        margin-top: var(--zws-gap-xs);
+        line-height: 1.5;
+      }
+
+      .zws-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--zws-gap-sm);
+        font-family: var(--zws-font);
+        font-size: 13px;
+        font-weight: 500;
+        padding: 8px 16px;
+        border: none;
+        border-radius: var(--zws-radius-md);
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          transform 0.05s,
+          box-shadow 0.15s;
+      }
+
+      .zws-button:active {
+        transform: translateY(1px);
+      }
+
+      .zws-button-primary {
+        background: var(--zws-primary);
+        color: #ffffff;
+        box-shadow: var(--zws-shadow-sm);
+      }
+
+      .zws-button-primary:hover {
+        background: var(--zws-primary-hover);
+      }
+
+      .zws-button-secondary {
+        background: var(--zws-surface);
+        color: var(--zws-text-secondary);
+        border: 1px solid var(--zws-border);
+      }
+
+      .zws-button-secondary:hover {
+        background: var(--zws-surface-hover);
+      }
+
+      .zws-button-danger {
+        background: var(--zws-error-subtle);
+        color: var(--zws-error);
+        border: 1px solid #fecaca;
+      }
+
+      .zws-button-danger:hover {
+        background: #fee2e2;
+      }
+
+      .zws-button-small {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: var(--zws-radius-sm);
+      }
+
+      .zws-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+      }
+
+      .zws-table th,
+      .zws-table td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--zws-border);
+      }
+
+      .zws-table th {
+        font-weight: 600;
+        color: var(--zws-text-secondary);
+        background: var(--zws-surface);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+
+      .zws-table th:first-child {
+        border-top-left-radius: var(--zws-radius-md);
+      }
+
+      .zws-table th:last-child {
+        border-top-right-radius: var(--zws-radius-md);
+      }
+
+      .zws-table tbody tr:hover {
+        background: var(--zws-surface-hover);
+      }
+
+      .zws-status {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--zws-gap-xs);
+        font-size: 12px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
+      .zws-status-success {
+        background: var(--zws-success-subtle);
+        color: #047857;
+      }
+
+      .zws-status-error {
+        background: var(--zws-error-subtle);
+        color: #b91c1c;
+      }
+
+      .zws-status-pending {
+        background: var(--zws-warning-subtle);
+        color: #b45309;
+      }
+
+      .zws-dialog {
+        background: var(--zws-bg);
+        border-radius: var(--zws-radius-xl);
+        box-shadow: var(--zws-shadow-lg);
+        padding: var(--zws-gap-xl);
+        max-width: 480px;
+      }
+
+      .zws-dialog-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 var(--zws-gap-sm) 0;
+      }
+
+      .zws-dialog-text {
+        font-size: 13px;
+        color: var(--zws-text-secondary);
+        line-height: 1.6;
+        margin: 0 0 var(--zws-gap-lg) 0;
+      }
+
+      .zws-dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--zws-gap-sm);
+      }
+
+      .zws-preview {
+        background: var(--zws-surface);
+        border: 1px dashed var(--zws-border-strong);
+        border-radius: var(--zws-radius-md);
+        padding: var(--zws-gap-md);
+        font-family: var(--zws-font-mono);
+        font-size: 12px;
+        color: var(--zws-text-secondary);
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow: auto;
+      }
+
+      .zws-menu-item {
+        display: flex;
+        align-items: center;
+        gap: var(--zws-gap-sm);
+        padding: 6px 12px;
+        font-size: 13px;
+        color: var(--zws-text);
+        border-radius: var(--zws-radius-sm);
+      }
+
+      .zws-menu-item:hover {
+        background: var(--zws-surface-hover);
+      }
+
+      .zws-icon {
+        width: 16px;
+        height: 16px;
+        color: var(--zws-primary);
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme inline {
+        --color-foreground: var(--zws-foreground);
+        --color-card: var(--zws-card);
+        --color-primary: var(--zws-primary);
+        --color-muted: var(--zws-muted);
+        --color-border: var(--zws-border);
+        --color-background: var(--zws-bg);
+        --radius-sm: var(--zws-radius-sm);
+        --radius-md: var(--zws-radius-md);
+        --radius-lg: var(--zws-radius-lg);
+        --radius-xl: var(--zws-radius-xl);
+      }
+      @layer base {
+        body {
+          background: var(--zws-bg);
+          color: var(--zws-foreground);
+        }
+        td,
+        th {
+          @apply break-words;
+          word-break: break-all;
+          word-break: auto-phrase;
+        }
+        th {
+          @apply whitespace-nowrap;
+        }
+      }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-foreground {
+        background-color: var(--zws-foreground);
+      }
+      .text-foreground {
+        color: var(--zws-foreground);
+      }
+      .border-foreground {
+        border-color: var(--zws-foreground);
+      }
+      .ring-foreground {
+        --tw-ring-color: var(--zws-foreground);
+      }
+      .bg-card {
+        background-color: var(--zws-card);
+      }
+      .text-card {
+        color: var(--zws-card);
+      }
+      .border-card {
+        border-color: var(--zws-card);
+      }
+      .ring-card {
+        --tw-ring-color: var(--zws-card);
+      }
+      .bg-primary {
+        background-color: var(--zws-primary);
+      }
+      .text-primary {
+        color: var(--zws-primary);
+      }
+      .border-primary {
+        border-color: var(--zws-primary);
+      }
+      .ring-primary {
+        --tw-ring-color: var(--zws-primary);
+      }
+      .bg-muted {
+        background-color: var(--zws-muted);
+      }
+      .text-muted {
+        color: var(--zws-muted);
+      }
+      .border-muted {
+        border-color: var(--zws-muted);
+      }
+      .ring-muted {
+        --tw-ring-color: var(--zws-muted);
+      }
+      .bg-border {
+        background-color: var(--zws-border);
+      }
+      .text-border {
+        color: var(--zws-border);
+      }
+      .border-border {
+        border-color: var(--zws-border);
+      }
+      .ring-border {
+        --tw-ring-color: var(--zws-border);
+      }
+      .bg-background {
+        background-color: var(--zws-bg);
+      }
+      .text-background {
+        color: var(--zws-bg);
+      }
+      .border-background {
+        border-color: var(--zws-bg);
+      }
+      .ring-background {
+        --tw-ring-color: var(--zws-bg);
+      }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+  </head>
+  <body
+    style="
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    "
+  >
+    <div class="window">
+      <div class="window-header">
+        <h2>同步历史</h2>
+        <button class="zws-button zws-button-secondary zws-button-small">
+          关闭
+        </button>
+      </div>
+      <div class="window-body">
+        <table class="zws-table">
+          <thead>
+            <tr>
+              <th>标题</th>
+              <th>Zotero Key</th>
+              <th>上次同步时间</th>
+              <th>状态</th>
+              <th>WPS Note ID</th>
+              <th>错误信息</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Example Paper Title: Zotero → WPS Notes Sync via MCP</td>
+              <td>EXAMPLE123</td>
+              <td>2025/7/27 14:32:00</td>
+              <td><span class="zws-status zws-status-success">● 成功</span></td>
+              <td>note_abc123</td>
+              <td>-</td>
+              <td>
+                <button
+                  class="zws-button zws-button-secondary zws-button-small"
+                >
+                  打开笔记
+                </button>
+                <button
+                  class="zws-button zws-button-secondary zws-button-small"
+                >
+                  重试
+                </button>
+                <button class="zws-button zws-button-danger zws-button-small">
+                  清除映射
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>Another Research Article on Academic Writing</td>
+              <td>ABC987654</td>
+              <td>2025/7/26 09:15:22</td>
+              <td><span class="zws-status zws-status-error">● 失败</span></td>
+              <td>-</td>
+              <td class="error-cell" title="网络请求超时">网络请求超时</td>
+              <td>
+                <button
+                  class="zws-button zws-button-secondary zws-button-small"
+                  disabled
+                >
+                  打开笔记
+                </button>
+                <button class="zws-button zws-button-primary zws-button-small">
+                  重试
+                </button>
+                <button class="zws-button zws-button-danger zws-button-small">
+                  清除映射
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>Pending Item for Review</td>
+              <td>PENDING001</td>
+              <td>-</td>
+              <td>
+                <span class="zws-status zws-status-pending">● 未同步</span>
+              </td>
+              <td>-</td>
+              <td>-</td>
+              <td>
+                <button
+                  class="zws-button zws-button-secondary zws-button-small"
+                  disabled
+                >
+                  打开笔记
+                </button>
+                <button
+                  class="zws-button zws-button-secondary zws-button-small"
+                >
+                  重试
+                </button>
+                <button class="zws-button zws-button-danger zws-button-small">
+                  清除映射
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <style>
+      .window {
+        width: 900px;
+        height: 520px;
+        background: var(--zws-bg);
+        border-radius: var(--zws-radius-xl);
+        box-shadow: var(--zws-shadow-lg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .window-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--zws-border);
+      }
+      .window-header h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .window-body {
+        flex: 1;
+        overflow: auto;
+        padding: 16px 24px;
+      }
+      .error-cell {
+        color: var(--zws-error);
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    </style>
+  </body>
+</html>

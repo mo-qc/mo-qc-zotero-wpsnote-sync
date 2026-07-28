@@ -70,18 +70,18 @@ npm run test:unit
 
 Open **Edit → Preferences → Zotero → WPS Notes Sync** in Zotero.
 
-| Preference | Description |
-| ---------- | ----------- |
-| MCP Endpoint | WPS MCP endpoint, e.g. `https://ainote.kdocs.cn/mcp-svc/mcp` |
-| API Key | Your WPS MCP API key |
-| Interface | Cloud MCP or local streamable_http |
-| Default Tags | Tags to add to every synced note |
-| Update existing notes | Update existing WPS notes instead of creating duplicates |
-| Incremental sync | Skip items that have not changed since last sync |
-| Prompt on conflict | Ask how to handle changed items |
+| Preference            | Description                                                   |
+| --------------------- | ------------------------------------------------------------- |
+| MCP Endpoint          | WPS MCP endpoint, e.g. `https://ainote.kdocs.cn/mcp-svc/mcp`  |
+| API Key               | Your WPS MCP API key                                          |
+| Interface             | Cloud MCP or local streamable_http                            |
+| Default Tags          | Tags to add to every synced note                              |
+| Update existing notes | Update existing WPS notes instead of creating duplicates      |
+| Incremental sync      | Skip items that have not changed since last sync              |
+| Prompt on conflict    | Ask how to handle changed items                               |
 | Sync content switches | Include abstract, attachments, annotations, tags, child notes |
-| Auto-sync tag | Automatically sync items when this tag is added |
-| Title/Body templates | Customize output using the template syntax below |
+| Auto-sync tag         | Automatically sync items when this tag is added               |
+| Title/Body templates  | Customize output using the template syntax below              |
 
 ### Template Syntax
 

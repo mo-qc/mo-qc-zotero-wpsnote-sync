@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>进度提示 - Zotero → WPS 笔记同步</title>
+    <style id="theme-vars">
+      /* Zotero → WPS 笔记同步 - 现代简约设计系统 */
+
+      :root {
+        /* Brand */
+        --zws-primary: #2563eb;
+        --zws-primary-hover: #1d4ed8;
+        --zws-primary-subtle: #eff6ff;
+        --zws-primary-ring: rgba(37, 99, 235, 0.25);
+
+        /* Neutral */
+        --zws-bg: #ffffff;
+        --zws-card: var(--zws-bg);
+        --zws-surface: #f8fafc;
+        --zws-surface-hover: #f1f5f9;
+        --zws-border: #e2e8f0;
+        --zws-border-strong: #cbd5e1;
+
+        /* Text */
+        --zws-text: #0f172a;
+        --zws-foreground: var(--zws-text);
+        --zws-text-secondary: #475569;
+        --zws-text-muted: #64748b;
+        --zws-muted: var(--zws-text-muted);
+        --zws-text-placeholder: #94a3b8;
+
+        /* Status */
+        --zws-success: #10b981;
+        --zws-success-subtle: #ecfdf5;
+        --zws-error: #ef4444;
+        --zws-error-subtle: #fef2f2;
+        --zws-warning: #f59e0b;
+        --zws-warning-subtle: #fffbeb;
+
+        /* Radius */
+        --zws-radius-sm: 6px;
+        --zws-radius-md: 10px;
+        --zws-radius-lg: 14px;
+        --zws-radius-xl: 18px;
+
+        /* Shadows */
+        --zws-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+        --zws-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+        --zws-shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+        /* Spacing */
+        --zws-gap-xs: 4px;
+        --zws-gap-sm: 8px;
+        --zws-gap-md: 16px;
+        --zws-gap-lg: 24px;
+        --zws-gap-xl: 32px;
+
+        /* Typography */
+        --zws-font:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+        --zws-font-mono:
+          "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+          "PingFang SC", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: var(--zws-font);
+        color: var(--zws-text);
+        background: var(--zws-bg);
+        line-height: 1.5;
+        margin: 0;
+      }
+
+      .zws-card {
+        background: var(--zws-bg);
+        border: 1px solid var(--zws-border);
+        border-radius: var(--zws-radius-lg);
+        box-shadow: var(--zws-shadow-sm);
+        padding: var(--zws-gap-lg);
+      }
+
+      .zws-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--zws-text);
+        margin: 0 0 var(--zws-gap-md) 0;
+        padding-bottom: var(--zws-gap-sm);
+        border-bottom: 1px solid var(--zws-border);
+      }
+
+      .zws-form-row {
+        display: flex;
+        align-items: center;
+        gap: var(--zws-gap-md);
+        margin-bottom: var(--zws-gap-md);
+      }
+
+      .zws-form-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .zws-label {
+        min-width: 120px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--zws-text-secondary);
+        flex-shrink: 0;
+      }
+
+      .zws-input,
+      .zws-select,
+      .zws-textarea {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--zws-font);
+        font-size: 13px;
+        padding: 8px 12px;
+        color: var(--zws-text);
+        background: var(--zws-bg);
+        border: 1px solid var(--zws-border-strong);
+        border-radius: var(--zws-radius-md);
+        outline: none;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+
+      .zws-input:hover,
+      .zws-select:hover,
+      .zws-textarea:hover {
+        border-color: var(--zws-border-strong);
+      }
+
+      .zws-input:focus,
+      .zws-select:focus,
+      .zws-textarea:focus {
+        border-color: var(--zws-primary);
+        box-shadow: 0 0 0 3px var(--zws-primary-ring);
+      }
+
+      .zws-textarea {
+        resize: vertical;
+        line-height: 1.6;
+      }
+
+      .zws-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: var(--zws-gap-sm);
+        margin-bottom: var(--zws-gap-sm);
+        font-size: 13px;
+        color: var(--zws-text-secondary);
+        cursor: pointer;
+      }
+
+      .zws-checkbox-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--zws-primary);
+        cursor: pointer;
+      }
+
+      .zws-help-text {
+        font-size: 12px;
+        color: var(--zws-text-muted);
+        margin-top: var(--zws-gap-xs);
+        line-height: 1.5;
+      }
+
+      .zws-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--zws-gap-sm);
+        font-family: var(--zws-font);
+        font-size: 13px;
+        font-weight: 500;
+        padding: 8px 16px;
+        border: none;
+        border-radius: var(--zws-radius-md);
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          transform 0.05s,
+          box-shadow 0.15s;
+      }
+
+      .zws-button:active {
+        transform: translateY(1px);
+      }
+
+      .zws-button-primary {
+        background: var(--zws-primary);
+        color: #ffffff;
+        box-shadow: var(--zws-shadow-sm);
+      }
+
+      .zws-button-primary:hover {
+        background: var(--zws-primary-hover);
+      }
+
+      .zws-button-secondary {
+        background: var(--zws-surface);
+        color: var(--zws-text-secondary);
+        border: 1px solid var(--zws-border);
+      }
+
+      .zws-button-secondary:hover {
+        background: var(--zws-surface-hover);
+      }
+
+      .zws-button-danger {
+        background: var(--zws-error-subtle);
+        color: var(--zws-error);
+        border: 1px solid #fecaca;
+      }
+
+      .zws-button-danger:hover {
+        background: #fee2e2;
+      }
+
+      .zws-button-small {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: var(--zws-radius-sm);
+      }
+
+      .zws-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+      }
+
+      .zws-table th,
+      .zws-table td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--zws-border);
+      }
+
+      .zws-table th {
+        font-weight: 600;
+        color: var(--zws-text-secondary);
+        background: var(--zws-surface);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+
+      .zws-table th:first-child {
+        border-top-left-radius: var(--zws-radius-md);
+      }
+
+      .zws-table th:last-child {
+        border-top-right-radius: var(--zws-radius-md);
+      }
+
+      .zws-table tbody tr:hover {
+        background: var(--zws-surface-hover);
+      }
+
+      .zws-status {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--zws-gap-xs);
+        font-size: 12px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
+      .zws-status-success {
+        background: var(--zws-success-subtle);
+        color: #047857;
+      }
+
+      .zws-status-error {
+        background: var(--zws-error-subtle);
+        color: #b91c1c;
+      }
+
+      .zws-status-pending {
+        background: var(--zws-warning-subtle);
+        color: #b45309;
+      }
+
+      .zws-dialog {
+        background: var(--zws-bg);
+        border-radius: var(--zws-radius-xl);
+        box-shadow: var(--zws-shadow-lg);
+        padding: var(--zws-gap-xl);
+        max-width: 480px;
+      }
+
+      .zws-dialog-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 var(--zws-gap-sm) 0;
+      }
+
+      .zws-dialog-text {
+        font-size: 13px;
+        color: var(--zws-text-secondary);
+        line-height: 1.6;
+        margin: 0 0 var(--zws-gap-lg) 0;
+      }
+
+      .zws-dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--zws-gap-sm);
+      }
+
+      .zws-preview {
+        background: var(--zws-surface);
+        border: 1px dashed var(--zws-border-strong);
+        border-radius: var(--zws-radius-md);
+        padding: var(--zws-gap-md);
+        font-family: var(--zws-font-mono);
+        font-size: 12px;
+        color: var(--zws-text-secondary);
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow: auto;
+      }
+
+      .zws-menu-item {
+        display: flex;
+        align-items: center;
+        gap: var(--zws-gap-sm);
+        padding: 6px 12px;
+        font-size: 13px;
+        color: var(--zws-text);
+        border-radius: var(--zws-radius-sm);
+      }
+
+      .zws-menu-item:hover {
+        background: var(--zws-surface-hover);
+      }
+
+      .zws-icon {
+        width: 16px;
+        height: 16px;
+        color: var(--zws-primary);
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme inline {
+        --color-foreground: var(--zws-foreground);
+        --color-card: var(--zws-card);
+        --color-primary: var(--zws-primary);
+        --color-muted: var(--zws-muted);
+        --color-border: var(--zws-border);
+        --color-background: var(--zws-bg);
+        --radius-sm: var(--zws-radius-sm);
+        --radius-md: var(--zws-radius-md);
+        --radius-lg: var(--zws-radius-lg);
+        --radius-xl: var(--zws-radius-xl);
+      }
+      @layer base {
+        body {
+          background: var(--zws-bg);
+          color: var(--zws-foreground);
+        }
+        td,
+        th {
+          @apply break-words;
+          word-break: break-all;
+          word-break: auto-phrase;
+        }
+        th {
+          @apply whitespace-nowrap;
+        }
+      }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-foreground {
+        background-color: var(--zws-foreground);
+      }
+      .text-foreground {
+        color: var(--zws-foreground);
+      }
+      .border-foreground {
+        border-color: var(--zws-foreground);
+      }
+      .ring-foreground {
+        --tw-ring-color: var(--zws-foreground);
+      }
+      .bg-card {
+        background-color: var(--zws-card);
+      }
+      .text-card {
+        color: var(--zws-card);
+      }
+      .border-card {
+        border-color: var(--zws-card);
+      }
+      .ring-card {
+        --tw-ring-color: var(--zws-card);
+      }
+      .bg-primary {
+        background-color: var(--zws-primary);
+      }
+      .text-primary {
+        color: var(--zws-primary);
+      }
+      .border-primary {
+        border-color: var(--zws-primary);
+      }
+      .ring-primary {
+        --tw-ring-color: var(--zws-primary);
+      }
+      .bg-muted {
+        background-color: var(--zws-muted);
+      }
+      .text-muted {
+        color: var(--zws-muted);
+      }
+      .border-muted {
+        border-color: var(--zws-muted);
+      }
+      .ring-muted {
+        --tw-ring-color: var(--zws-muted);
+      }
+      .bg-border {
+        background-color: var(--zws-border);
+      }
+      .text-border {
+        color: var(--zws-border);
+      }
+      .border-border {
+        border-color: var(--zws-border);
+      }
+      .ring-border {
+        --tw-ring-color: var(--zws-border);
+      }
+      .bg-background {
+        background-color: var(--zws-bg);
+      }
+      .text-background {
+        color: var(--zws-bg);
+      }
+      .border-background {
+        border-color: var(--zws-bg);
+      }
+      .ring-background {
+        --tw-ring-color: var(--zws-bg);
+      }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+  </head>
+  <body style="background: #f8fafc; min-height: 100vh; margin: 0">
+    <div class="menu">
+      <div class="zws-menu-item">
+        <svg
+          class="zws-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+          <polyline points="16 6 12 2 8 6" />
+          <line x1="12" y1="2" x2="12" y2="15" />
+        </svg>
+        同步到 WPS 笔记
+      </div>
+      <div class="zws-menu-item">
+        <svg
+          class="zws-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        同步历史
+      </div>
+    </div>
+
+    <div class="toast-stack">
+      <div class="toast">
+        <div class="toast-icon info">i</div>
+        <div class="toast-body">
+          <p class="toast-title">Zotero → WPS 笔记同步</p>
+          <p class="toast-text">同步中 13/20：Example Paper Title...</p>
+          <div class="progress-track"><div class="progress-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="toast">
+        <div class="toast-icon success">✓</div>
+        <div class="toast-body">
+          <p class="toast-title">同步完成</p>
+          <p class="toast-text">成功同步 18 条文献到 WPS 笔记</p>
+        </div>
+      </div>
+
+      <div class="toast">
+        <div class="toast-icon error">✕</div>
+        <div class="toast-body">
+          <p class="toast-title">同步结果</p>
+          <p class="toast-text">成功 18 条，失败 2 条</p>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .toast-stack {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 320px;
+      }
+      .toast {
+        background: var(--zws-bg);
+        border: 1px solid var(--zws-border);
+        border-radius: var(--zws-radius-lg);
+        box-shadow: var(--zws-shadow-md);
+        padding: 14px 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .toast-icon {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .toast-icon.info {
+        background: var(--zws-primary);
+      }
+      .toast-icon.success {
+        background: var(--zws-success);
+      }
+      .toast-icon.error {
+        background: var(--zws-error);
+      }
+      .toast-body {
+        flex: 1;
+      }
+      .toast-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .toast-text {
+        font-size: 12px;
+        color: var(--zws-text-secondary);
+        margin: 4px 0 0 0;
+      }
+      .progress-track {
+        height: 4px;
+        background: var(--zws-border);
+        border-radius: 2px;
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        width: 65%;
+        background: var(--zws-primary);
+        border-radius: 2px;
+        transition: width 0.3s ease;
+      }
+      .menu {
+        position: fixed;
+        top: 24px;
+        left: 24px;
+        width: 220px;
+        background: var(--zws-bg);
+        border: 1px solid var(--zws-border);
+        border-radius: var(--zws-radius-lg);
+        box-shadow: var(--zws-shadow-md);
+        padding: 8px;
+      }
+    </style>
+  </body>
+</html>

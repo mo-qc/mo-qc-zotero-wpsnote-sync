@@ -4,300 +4,376 @@
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
-  <label>
-    <html:h2 data-l10n-id="pref-title"></html:h2>
-  </label>
+  <html:style>
+    .zws-prefs-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe
+    UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei",
+    sans-serif; color: #0f172a; line-height: 1.5; padding: 8px 4px 16px 4px;
+    max-width: 760px; } .zws-prefs-header { display: flex; align-items: center;
+    gap: 12px; margin-bottom: 20px; } .zws-prefs-header h2 { font-size: 18px;
+    font-weight: 600; margin: 0; color: #0f172a; } .zws-prefs-header
+    .zws-version { font-size: 12px; color: #64748b; margin-left: auto; }
+    .zws-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius:
+    12px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); padding: 18px 20px;
+    margin-bottom: 16px; } .zws-card-title { font-size: 13px; font-weight: 600;
+    color: #0f172a; margin: 0 0 14px 0; padding-bottom: 10px; border-bottom: 1px
+    solid #e2e8f0; } .zws-form-row { display: flex; align-items: center; gap:
+    14px; margin-bottom: 12px; } .zws-form-row:last-child { margin-bottom: 0; }
+    .zws-form-row.zws-top { align-items: flex-start; } .zws-label { min-width:
+    120px; max-width: 120px; font-size: 12px; font-weight: 500; color: #475569;
+    flex-shrink: 0; padding-top: 7px; } .zws-input, .zws-select, .zws-textarea {
+    flex: 1; min-width: 0; font-family: inherit; font-size: 12px; padding: 7px
+    10px; color: #0f172a; background: #ffffff; border: 1px solid #cbd5e1;
+    border-radius: 8px; outline: none; transition: border-color 0.15s,
+    box-shadow 0.15s; } .zws-input:hover, .zws-select:hover, .zws-textarea:hover
+    { border-color: #94a3b8; } .zws-input:focus, .zws-select:focus,
+    .zws-textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,
+    99, 235, 0.18); } .zws-textarea { resize: vertical; line-height: 1.5; }
+    .zws-checkbox-grid { display: grid; grid-template-columns: repeat(2,
+    minmax(0, 1fr)); gap: 8px 16px; } .zws-checkbox-row { display: flex;
+    align-items: center; gap: 8px; font-size: 12px; color: #475569; cursor:
+    pointer; user-select: none; } .zws-checkbox-row input[type="checkbox"] {
+    width: 15px; height: 15px; accent-color: #2563eb; cursor: pointer;
+    flex-shrink: 0; } .zws-help-text { font-size: 11px; color: #64748b;
+    margin-top: 4px; line-height: 1.5; } .zws-preview { background: #f8fafc;
+    border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; font-family:
+    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+    font-size: 11px; color: #475569; line-height: 1.6; white-space: pre-wrap;
+    overflow: auto; max-height: 240px; } .zws-preview-label { font-size: 12px;
+    font-weight: 500; color: #475569; margin: 14px 0 6px 0; display: block; }
+    .zws-preview-label:first-child { margin-top: 0; } .zws-hidden { display:
+    none !important; }
+  </html:style>
 
-  <hbox align="center">
-    <html:label
-      for="zotero-prefpane-__addonRef__-mcpInterfaceType"
-      data-l10n-id="pref-mcpInterfaceType"
-      style="min-width: 100px"
-    ></html:label>
-    <html:select
-      id="zotero-prefpane-__addonRef__-mcpInterfaceType"
-      preference="mcpInterfaceType"
-      style="flex: 1"
-    >
-      <html:option
-        value="cloud"
-        data-l10n-id="pref-mcpInterfaceType-cloud"
-      ></html:option>
-      <html:option
-        value="local"
-        data-l10n-id="pref-mcpInterfaceType-local"
-      ></html:option>
-    </html:select>
-  </hbox>
+  <html:div class="zws-prefs-root">
+    <html:div class="zws-prefs-header">
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#2563eb"
+        stroke-width="2"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+      <html:h2 data-l10n-id="pref-title"></html:h2>
+      <html:span
+        class="zws-version"
+        data-l10n-id="pref-help"
+        data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
+      ></html:span>
+    </html:div>
 
-  <vbox id="zotero-prefpane-__addonRef__-cloud-config">
-    <hbox align="center">
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">MCP 连接</html:h3>
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-mcpInterfaceType"
+          data-l10n-id="pref-mcpInterfaceType"
+        ></html:label>
+        <html:select
+          class="zws-select"
+          id="zotero-prefpane-__addonRef__-mcpInterfaceType"
+          preference="mcpInterfaceType"
+        >
+          <html:option
+            value="cloud"
+            data-l10n-id="pref-mcpInterfaceType-cloud"
+          ></html:option>
+          <html:option
+            value="local"
+            data-l10n-id="pref-mcpInterfaceType-local"
+          ></html:option>
+        </html:select>
+      </html:div>
+
+      <html:div id="zotero-prefpane-__addonRef__-cloud-config">
+        <html:div class="zws-form-row">
+          <html:label
+            class="zws-label"
+            for="zotero-prefpane-__addonRef__-wpsMcpEndpoint"
+            data-l10n-id="pref-wpsMcpEndpoint"
+          ></html:label>
+          <html:input
+            class="zws-input"
+            type="text"
+            id="zotero-prefpane-__addonRef__-wpsMcpEndpoint"
+            preference="wpsMcpEndpoint"
+          ></html:input>
+        </html:div>
+
+        <html:div class="zws-form-row">
+          <html:label
+            class="zws-label"
+            for="zotero-prefpane-__addonRef__-wpsMcpApiKey"
+            data-l10n-id="pref-wpsMcpApiKey"
+          ></html:label>
+          <html:input
+            class="zws-input"
+            type="password"
+            id="zotero-prefpane-__addonRef__-wpsMcpApiKey"
+          ></html:input>
+        </html:div>
+      </html:div>
+
+      <html:div
+        id="zotero-prefpane-__addonRef__-local-config"
+        class="zws-hidden"
+      >
+        <html:div class="zws-form-row">
+          <html:label
+            class="zws-label"
+            for="zotero-prefpane-__addonRef__-localMcpUrl"
+            data-l10n-id="pref-localMcpUrl"
+          ></html:label>
+          <html:input
+            class="zws-input"
+            type="text"
+            id="zotero-prefpane-__addonRef__-localMcpUrl"
+            preference="localMcpUrl"
+          ></html:input>
+        </html:div>
+
+        <html:div class="zws-form-row">
+          <html:label
+            class="zws-label"
+            for="zotero-prefpane-__addonRef__-localMcpToken"
+            data-l10n-id="pref-localMcpToken"
+          ></html:label>
+          <html:input
+            class="zws-input"
+            type="password"
+            id="zotero-prefpane-__addonRef__-localMcpToken"
+          ></html:input>
+        </html:div>
+      </html:div>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">同步选项</html:h3>
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-defaultTags"
+          data-l10n-id="pref-defaultTags"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-defaultTags"
+          preference="defaultTags"
+        ></html:input>
+      </html:div>
+
+      <html:div class="zws-checkbox-grid">
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-updateExisting"
+            preference="updateExisting"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-updateExisting"
+            data-l10n-id="pref-updateExisting"
+          ></html:label>
+        </label>
+
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-incrementalSync"
+            preference="incrementalSync"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-incrementalSync"
+            data-l10n-id="pref-incrementalSync"
+          ></html:label>
+        </label>
+
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-promptOnConflict"
+            preference="promptOnConflict"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-promptOnConflict"
+            data-l10n-id="pref-promptOnConflict"
+          ></html:label>
+        </label>
+      </html:div>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3
+        class="zws-card-title"
+        data-l10n-id="pref-syncInclude-title"
+      ></html:h3>
+      <html:div class="zws-checkbox-grid">
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-syncIncludeAbstract"
+            preference="syncIncludeAbstract"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-syncIncludeAbstract"
+            data-l10n-id="pref-syncIncludeAbstract"
+          ></html:label>
+        </label>
+
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-syncIncludeAttachments"
+            preference="syncIncludeAttachments"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-syncIncludeAttachments"
+            data-l10n-id="pref-syncIncludeAttachments"
+          ></html:label>
+        </label>
+
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-syncIncludeAnnotations"
+            preference="syncIncludeAnnotations"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-syncIncludeAnnotations"
+            data-l10n-id="pref-syncIncludeAnnotations"
+          ></html:label>
+        </label>
+
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-syncIncludeTags"
+            preference="syncIncludeTags"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-syncIncludeTags"
+            data-l10n-id="pref-syncIncludeTags"
+          ></html:label>
+        </label>
+
+        <label class="zws-checkbox-row">
+          <html:input
+            type="checkbox"
+            id="zotero-prefpane-__addonRef__-syncIncludeNotes"
+            preference="syncIncludeNotes"
+          ></html:input>
+          <html:label
+            for="zotero-prefpane-__addonRef__-syncIncludeNotes"
+            data-l10n-id="pref-syncIncludeNotes"
+          ></html:label>
+        </label>
+      </html:div>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">自动同步</html:h3>
+      <label class="zws-checkbox-row" style="margin-bottom: 12px">
+        <html:input
+          type="checkbox"
+          id="zotero-prefpane-__addonRef__-autoSyncEnabled"
+          preference="autoSyncEnabled"
+        ></html:input>
+        <html:label
+          for="zotero-prefpane-__addonRef__-autoSyncEnabled"
+          data-l10n-id="pref-autoSyncEnabled"
+        ></html:label>
+      </label>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-autoSyncTag"
+          data-l10n-id="pref-autoSyncTag"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-autoSyncTag"
+          preference="autoSyncTag"
+          placeholder="例如：同步到 WPS"
+        ></html:input>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-autoSyncTag-help"
+      ></html:p>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">模板与预览</html:h3>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-titleTemplate"
+          data-l10n-id="pref-titleTemplate"
+        ></html:label>
+        <html:textarea
+          class="zws-textarea"
+          id="zotero-prefpane-__addonRef__-titleTemplate"
+          preference="titleTemplate"
+          rows="1"
+        ></html:textarea>
+      </html:div>
+
+      <html:div class="zws-form-row zws-top">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-bodyTemplate"
+          data-l10n-id="pref-bodyTemplate"
+        ></html:label>
+        <html:textarea
+          class="zws-textarea"
+          id="zotero-prefpane-__addonRef__-bodyTemplate"
+          preference="bodyTemplate"
+          rows="12"
+          style="
+            font-family:
+              &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
+              &quot;Roboto Mono&quot;, Consolas, monospace;
+          "
+        ></html:textarea>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-bodyTemplate-help"
+      ></html:p>
+
       <html:label
-        for="zotero-prefpane-__addonRef__-wpsMcpEndpoint"
-        data-l10n-id="pref-wpsMcpEndpoint"
-        style="min-width: 100px"
+        class="zws-preview-label"
+        for="zotero-prefpane-__addonRef__-titlePreview"
+        data-l10n-id="pref-titlePreview"
       ></html:label>
-      <html:input
-        type="text"
-        id="zotero-prefpane-__addonRef__-wpsMcpEndpoint"
-        preference="wpsMcpEndpoint"
-        style="flex: 1"
-      ></html:input>
-    </hbox>
+      <html:textarea
+        class="zws-textarea zws-preview"
+        id="zotero-prefpane-__addonRef__-titlePreview"
+        rows="1"
+        readonly="readonly"
+        style="overflow: auto; resize: vertical"
+      ></html:textarea>
 
-    <hbox align="center">
       <html:label
-        for="zotero-prefpane-__addonRef__-wpsMcpApiKey"
-        data-l10n-id="pref-wpsMcpApiKey"
-        style="min-width: 100px"
+        class="zws-preview-label"
+        for="zotero-prefpane-__addonRef__-bodyPreview"
+        data-l10n-id="pref-bodyPreview"
       ></html:label>
-      <html:input
-        type="password"
-        id="zotero-prefpane-__addonRef__-wpsMcpApiKey"
-        style="flex: 1"
-      ></html:input>
-    </hbox>
-  </vbox>
-
-  <vbox id="zotero-prefpane-__addonRef__-local-config" hidden="true">
-    <hbox align="center">
-      <html:label
-        for="zotero-prefpane-__addonRef__-localMcpUrl"
-        data-l10n-id="pref-localMcpUrl"
-        style="min-width: 100px"
-      ></html:label>
-      <html:input
-        type="text"
-        id="zotero-prefpane-__addonRef__-localMcpUrl"
-        preference="localMcpUrl"
-        style="flex: 1"
-      ></html:input>
-    </hbox>
-
-    <hbox align="center">
-      <html:label
-        for="zotero-prefpane-__addonRef__-localMcpToken"
-        data-l10n-id="pref-localMcpToken"
-        style="min-width: 100px"
-      ></html:label>
-      <html:input
-        type="password"
-        id="zotero-prefpane-__addonRef__-localMcpToken"
-        style="flex: 1"
-      ></html:input>
-    </hbox>
-  </vbox>
-
-  <hbox align="center">
-    <html:label
-      for="zotero-prefpane-__addonRef__-defaultTags"
-      data-l10n-id="pref-defaultTags"
-      style="min-width: 100px"
-    >
-    </html:label>
-    <html:input
-      type="text"
-      id="zotero-prefpane-__addonRef__-defaultTags"
-      preference="defaultTags"
-      style="flex: 1"
-    >
-    </html:input>
-  </hbox>
-
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-updateExisting"
-      preference="updateExisting"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-updateExisting"
-      data-l10n-id="pref-updateExisting"
-    ></html:label>
-  </hbox>
-
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-incrementalSync"
-      preference="incrementalSync"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-incrementalSync"
-      data-l10n-id="pref-incrementalSync"
-    ></html:label>
-  </hbox>
-
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-promptOnConflict"
-      preference="promptOnConflict"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-promptOnConflict"
-      data-l10n-id="pref-promptOnConflict"
-    ></html:label>
-  </hbox>
-
-  <html:label data-l10n-id="pref-syncInclude-title"></html:label>
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-syncIncludeAbstract"
-      preference="syncIncludeAbstract"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-syncIncludeAbstract"
-      data-l10n-id="pref-syncIncludeAbstract"
-    >
-    </html:label>
-  </hbox>
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-syncIncludeAttachments"
-      preference="syncIncludeAttachments"
-    ></html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-syncIncludeAttachments"
-      data-l10n-id="pref-syncIncludeAttachments"
-    >
-    </html:label>
-  </hbox>
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-syncIncludeAnnotations"
-      preference="syncIncludeAnnotations"
-    ></html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-syncIncludeAnnotations"
-      data-l10n-id="pref-syncIncludeAnnotations"
-    >
-    </html:label>
-  </hbox>
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-syncIncludeTags"
-      preference="syncIncludeTags"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-syncIncludeTags"
-      data-l10n-id="pref-syncIncludeTags"
-    ></html:label>
-  </hbox>
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-syncIncludeNotes"
-      preference="syncIncludeNotes"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-syncIncludeNotes"
-      data-l10n-id="pref-syncIncludeNotes"
-    ></html:label>
-  </hbox>
-
-  <hbox align="center">
-    <html:input
-      type="checkbox"
-      id="zotero-prefpane-__addonRef__-autoSyncEnabled"
-      preference="autoSyncEnabled"
-    >
-    </html:input>
-    <html:label
-      for="zotero-prefpane-__addonRef__-autoSyncEnabled"
-      data-l10n-id="pref-autoSyncEnabled"
-    ></html:label>
-  </hbox>
-
-  <hbox align="center">
-    <html:label
-      for="zotero-prefpane-__addonRef__-autoSyncTag"
-      data-l10n-id="pref-autoSyncTag"
-      style="min-width: 100px"
-    >
-    </html:label>
-    <html:input
-      type="text"
-      id="zotero-prefpane-__addonRef__-autoSyncTag"
-      preference="autoSyncTag"
-      style="flex: 1"
-      placeholder="例如：同步到 WPS"
-    ></html:input>
-  </hbox>
-  <html:label
-    data-l10n-id="pref-autoSyncTag-help"
-    style="font-size: 0.85em; color: gray"
-  ></html:label>
-
-  <html:label
-    for="zotero-prefpane-__addonRef__-titleTemplate"
-    data-l10n-id="pref-titleTemplate"
-  ></html:label>
-  <html:textarea
-    id="zotero-prefpane-__addonRef__-titleTemplate"
-    preference="titleTemplate"
-    rows="1"
-    style="width: 100%"
-  ></html:textarea>
-
-  <html:label
-    for="zotero-prefpane-__addonRef__-bodyTemplate"
-    data-l10n-id="pref-bodyTemplate"
-  ></html:label>
-  <html:textarea
-    id="zotero-prefpane-__addonRef__-bodyTemplate"
-    preference="bodyTemplate"
-    rows="12"
-    style="width: 100%; font-family: monospace"
-  ></html:textarea>
-  <html:label
-    data-l10n-id="pref-bodyTemplate-help"
-    style="font-size: 0.85em; color: gray"
-  ></html:label>
-
-  <html:label
-    for="zotero-prefpane-__addonRef__-titlePreview"
-    data-l10n-id="pref-titlePreview"
-    style="margin-top: 10px"
-  >
-  </html:label>
-  <html:textarea
-    id="zotero-prefpane-__addonRef__-titlePreview"
-    rows="1"
-    readonly="readonly"
-    style="width: 100%; background: #f9f9f9; overflow: auto; resize: vertical"
-  ></html:textarea>
-
-  <html:label
-    for="zotero-prefpane-__addonRef__-bodyPreview"
-    data-l10n-id="pref-bodyPreview"
-  ></html:label>
-  <html:textarea
-    id="zotero-prefpane-__addonRef__-bodyPreview"
-    rows="10"
-    readonly="readonly"
-    style="
-      width: 100%;
-      font-family: monospace;
-      background: #f9f9f9;
-      overflow: auto;
-      resize: vertical;
-    "
-  ></html:textarea>
+      <html:textarea
+        class="zws-textarea zws-preview"
+        id="zotero-prefpane-__addonRef__-bodyPreview"
+        rows="10"
+        readonly="readonly"
+        style="overflow: auto; resize: vertical"
+      ></html:textarea>
+    </html:div>
+  </html:div>
 </groupbox>
-<vbox>
-  <html:label
-    data-l10n-id="pref-help"
-    data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
-  ></html:label>
-</vbox>

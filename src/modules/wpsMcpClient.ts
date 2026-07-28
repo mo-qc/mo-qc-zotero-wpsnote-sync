@@ -329,9 +329,7 @@ export class WpsMcpClient {
           undefined,
           this.nextId(),
         )) as { tools?: { name?: string }[] };
-        this.tools = (toolsResult?.tools || []).map(
-          (t) => t.name as string,
-        );
+        this.tools = (toolsResult?.tools || []).map((t) => t.name as string);
         ztoolkit.log("MCP tools", this.tools);
 
         this.initialized = true;
@@ -425,7 +423,9 @@ export class WpsMcpClient {
   }
 
   async getNoteOutline(noteId: string): Promise<NoteOutline> {
-    return this.callTool("get_note_outline", { note_id: noteId }) as Promise<NoteOutline>;
+    return this.callTool("get_note_outline", {
+      note_id: noteId,
+    }) as Promise<NoteOutline>;
   }
 
   async editBlock(
@@ -511,9 +511,7 @@ export class WpsMcpClient {
 
   async searchNotes(keyword: string, limit = 10): Promise<unknown[]> {
     const isLocal = this.interfaceType === "local";
-    const args = isLocal
-      ? { keywords: [keyword], limit }
-      : { keyword, limit };
+    const args = isLocal ? { keywords: [keyword], limit } : { keyword, limit };
     const res = await this.callTool("search_notes", args);
     const resObj = res as {
       notes?: unknown[];
