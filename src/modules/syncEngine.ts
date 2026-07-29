@@ -150,9 +150,10 @@ async function syncNoteImages(
       (headingRes as any).block_id ||
       anchorId;
 
-    // 并行插入图片，提高同步速度。顺序由 WPS 服务端决定，基本保持原序。
-    await Promise.all(
-      resolvedImages.map(async (img) => {
+    // 受控并发插入图片，避免一次性请求过多导致 WPS 服务端限流。
+    await runWithConcurrency(
+      resolvedImages,
+      async (img) => {
         try {
           await client.insertImage(noteId, imageAnchorId, img.src, img.alt);
         } catch (e: any) {
@@ -162,7 +163,8 @@ async function syncNoteImages(
             e?.message || String(e),
           );
         }
-      }),
+      },
+      { concurrency: 3 },
     );
   } catch (e: any) {
     ztoolkit.log("Sync note images failed", e?.message || String(e));
