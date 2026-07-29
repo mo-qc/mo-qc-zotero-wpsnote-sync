@@ -786,7 +786,7 @@ ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKe
   bindHistoryActions(win);
 }
 
-export async function runSync() {
+export async function runSync(force = false) {
   const controller = new AbortControllerImpl();
   let cancelled = false;
 
@@ -813,7 +813,7 @@ export async function runSync() {
     const results = await syncSelectedItems({
       addTags: parseDefaultTags(),
       updateExisting: Boolean(getPref("updateExisting")),
-      incrementalSync: Boolean(getPref("incrementalSync")),
+      incrementalSync: force ? false : Boolean(getPref("incrementalSync")),
       promptOnConflict: Boolean(getPref("promptOnConflict")),
       signal: controller.signal as AbortSignal,
       onProgress: (current, total, title) => {
@@ -864,6 +864,16 @@ export function registerMenus() {
     },
   });
 
+  ztoolkit.Menu.register("item", {
+    tag: "menuitem",
+    id: `zotero-wpsnote-sync-force-menuitem`,
+    label: getString("menu-force-sync-to-wpsnote"),
+    icon: menuIcon,
+    commandListener: (ev) => {
+      runSync(true);
+    },
+  });
+
   ztoolkit.Menu.register("collection", {
     tag: "menuitem",
     id: `zotero-wpsnote-sync-collection-menuitem`,
@@ -871,6 +881,16 @@ export function registerMenus() {
     icon: menuIcon,
     commandListener: (ev) => {
       runSync();
+    },
+  });
+
+  ztoolkit.Menu.register("collection", {
+    tag: "menuitem",
+    id: `zotero-wpsnote-sync-force-collection-menuitem`,
+    label: getString("menu-force-sync-collection-to-wpsnote"),
+    icon: menuIcon,
+    commandListener: (ev) => {
+      runSync(true);
     },
   });
 
