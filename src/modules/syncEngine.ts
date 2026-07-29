@@ -74,6 +74,7 @@ export interface SyncResult {
   noteUrl?: string;
   error?: string;
   errorType?: SyncErrorType;
+  errorCode?: number | string;
 }
 
 function collectSyncImages(notes: ZoteroNote[]) {
@@ -217,7 +218,46 @@ function checkCancelled(signal?: AbortSignal): void {
 }
 
 function classifyError(err: any): SyncErrorType {
+  const code = (err as any)?.code;
   const msg = String(err?.message || "").toLowerCase();
+
+  // 优先根据结构化错误码判断
+  if (code !== undefined) {
+    if (
+      code === 401 ||
+      code === 403 ||
+      code === "UNAUTHORIZED" ||
+      code === "AUTH_ERROR" ||
+      code === "INVALID_API_KEY"
+    ) {
+      return "mcp";
+    }
+    if (
+      code === 429 ||
+      code === 500 ||
+      code === 502 ||
+      code === 503 ||
+      code === 504 ||
+      code === "RATE_LIMIT" ||
+      code === "TIMEOUT" ||
+      code === "EMPTY_RESPONSE"
+    ) {
+      return "network";
+    }
+    if (
+      code === "NOTE_NOT_FOUND" ||
+      code === "INVALID_NOTE_ID" ||
+      code === "BLOCK_NOT_FOUND" ||
+      code === "INVALID_CONTENT" ||
+      code === "TOOL_ERROR"
+    ) {
+      return "mcp";
+    }
+    if (code === "IMAGE_ERROR" || code === "INSERT_IMAGE_FAILED") {
+      return "image";
+    }
+  }
+
   if (
     msg.includes("network") ||
     msg.includes("timeout") ||
@@ -233,7 +273,7 @@ function classifyError(err: any): SyncErrorType {
   }
   if (
     msg.includes("mcp error") ||
-    msg.includes("mcp") ||
+    msg.includes("mcp tool error") ||
     msg.includes("未配置") ||
     msg.includes("未提供") ||
     msg.includes("未返回") ||
@@ -435,7 +475,14 @@ export async function syncItem(
   } catch (err: any) {
     result.error = err?.message || String(err);
     result.errorType = classifyError(err);
-    ztoolkit.log("Sync failed", item.key, result.errorType, result.error);
+    result.errorCode = (err as any)?.code;
+    ztoolkit.log(
+      "Sync failed",
+      item.key,
+      result.errorType,
+      result.errorCode,
+      result.error,
+    );
   }
 
   recordSyncResult(item.key, {
@@ -446,6 +493,7 @@ export async function syncItem(
     itemModified,
     error: result.error,
     errorType: result.errorType,
+    errorCode: result.errorCode,
   });
 
   return result;

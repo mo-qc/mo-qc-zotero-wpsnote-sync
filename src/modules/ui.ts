@@ -45,17 +45,15 @@ function parseDefaultTags(): string[] {
     .filter(Boolean);
 }
 
-function errorTypeLabel(type?: string): string {
-  switch (type) {
-    case "network":
-      return "[网络] ";
-    case "mcp":
-      return "[MCP] ";
-    case "image":
-      return "[图片] ";
-    default:
-      return "";
-  }
+function errorTypeLabel(type?: string, code?: number | string): string {
+  const prefix =
+    {
+      network: "[网络] ",
+      mcp: "[MCP] ",
+      image: "[图片] ",
+    }[type || ""] || "";
+  const codeLabel = code !== undefined ? `(${code}) ` : "";
+  return prefix + codeLabel;
 }
 
 let conflictBatchChoice: ConflictResolution | null = null;
@@ -161,7 +159,7 @@ function showResults(results: SyncResult[]) {
   });
   for (const r of failed.slice(0, 2)) {
     popup.createLine({
-      text: `${errorTypeLabel(r.errorType)}「${r.title.slice(0, 20)}」${r.error?.slice(0, 60) || ""}`,
+      text: `${errorTypeLabel(r.errorType, r.errorCode)}「${r.title.slice(0, 20)}」${r.error?.slice(0, 60) || ""}`,
       type: "error",
     });
   }
@@ -445,6 +443,7 @@ export function openSyncHistory() {
       const noteId = entry.noteId || "-";
       const error = entry.lastError || "";
       const errorType = entry.lastErrorType || "";
+      const errorCode = entry.lastErrorCode;
       const noteUrl = entry.noteUrl || "";
       const searchText = `${title} ${itemKey} ${noteId} ${statusText} ${error}`;
       const openBtn = noteUrl
@@ -456,7 +455,7 @@ export function openSyncHistory() {
 <td class="zws-history-cell zws-history-mono">${formatSyncTime(entry.lastSync)}</td>
 <td class="zws-history-cell"><span class="zws-history-status ${statusClass}"><span style="color:${statusDot};">●</span> ${statusText}</span></td>
 <td class="zws-history-cell zws-history-mono">${escapeHtml(noteId)}</td>
-<td class="zws-history-cell zws-history-error" title="${escapeHtml(error)}">${errorTypeLabel(errorType)}${escapeHtml(error.slice(0, 80))}</td>
+<td class="zws-history-cell zws-history-error" title="${escapeHtml(error)}">${errorTypeLabel(errorType, errorCode)}${escapeHtml(error.slice(0, 80))}</td>
 <td class="zws-history-cell zws-history-actions">
 ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKey)}" class="zws-history-btn zws-history-btn-primary">重试</button><button data-history-action="clear-mapping" data-item-key="${escapeHtml(itemKey)}" class="zws-history-btn zws-history-btn-danger">清除映射</button>
 </td>

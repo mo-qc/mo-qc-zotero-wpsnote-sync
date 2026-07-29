@@ -17,6 +17,7 @@ export interface SyncMappingEntry {
   lastSuccess?: boolean;
   lastError?: string;
   lastErrorType?: string;
+  lastErrorCode?: number | string;
 }
 
 export interface SyncMapping {
@@ -81,6 +82,7 @@ export function recordSyncResult(
     noteModified?: string;
     error?: string;
     errorType?: string;
+    errorCode?: number | string;
   },
 ): void {
   const mapping = loadMapping();
@@ -90,6 +92,7 @@ export function recordSyncResult(
     lastSuccess: result.success,
     lastError: result.error,
     lastErrorType: result.errorType,
+    lastErrorCode: result.errorCode,
   };
   if (result.title) {
     entry.title = result.title;

@@ -21,6 +21,25 @@ export interface McpEnvelope<T = unknown> {
   data?: T;
 }
 
+/**
+ * 结构化 MCP 错误，包含可机器识别的错误码与是否可重试标记。
+ */
+export class McpError extends Error {
+  public code: number | string;
+  public isRetryable: boolean;
+
+  constructor(options: {
+    code: number | string;
+    message: string;
+    isRetryable?: boolean;
+  }) {
+    super(options.message);
+    this.name = "McpError";
+    this.code = options.code;
+    this.isRetryable = options.isRetryable ?? false;
+  }
+}
+
 export interface NoteBlock {
   id: string;
   type?: string;
@@ -188,18 +207,32 @@ export class WpsMcpClient {
     ztoolkit.log("MCP response", xhr.status, text.slice(0, 800));
 
     if (xhr.status < 200 || xhr.status >= 300) {
-      throw new Error(`MCP HTTP ${xhr.status}: ${text.slice(0, 200)}`);
+      throw new McpError({
+        code: xhr.status,
+        message: `MCP HTTP ${xhr.status}: ${text.slice(0, 200)}`,
+        isRetryable: xhr.status >= 500 || xhr.status === 429,
+      });
     }
 
     // WPS 笔记 MCP 使用 SSE 流返回，解析 data: 行
     const parsed = parseMcpSseResponse(text, id);
     if (!parsed) {
-      throw new Error("MCP response is empty");
+      throw new McpError({
+        code: "EMPTY_RESPONSE",
+        message: "MCP response is empty",
+        isRetryable: true,
+      });
     }
     if (parsed.error) {
-      throw new Error(
-        `MCP error ${parsed.error.code}: ${parsed.error.message}`,
-      );
+      const code = parsed.error.code;
+      // JSON-RPC 标准错误码：-32768 ~ -32000 为协议/服务端错误，通常可重试
+      const isProtocolError =
+        typeof code === "number" && code <= -32000 && code >= -32768;
+      throw new McpError({
+        code,
+        message: `MCP error ${code}: ${parsed.error.message}`,
+        isRetryable: isProtocolError || code === -32000,
+      });
     }
 
     return parsed.result;
@@ -218,8 +251,12 @@ export class WpsMcpClient {
         return await this.doRequest(method, params, id);
       } catch (err: any) {
         lastError = err;
-        const isNetworkError = !err?.message?.includes("MCP error");
-        if (!isNetworkError || attempt === maxRetries) {
+        const isNetworkError =
+          !err?.message?.includes("MCP error") &&
+          !err?.message?.includes("MCP tool error");
+        const retryable =
+          err instanceof McpError ? err.isRetryable : isNetworkError;
+        if (!retryable || attempt === maxRetries) {
           throw err;
         }
         const delay = Math.min(1000 * 2 ** attempt, 5000);
@@ -392,9 +429,19 @@ export class WpsMcpClient {
     if (parsed && typeof parsed === "object" && "ok" in parsed) {
       const envelope = parsed as McpEnvelope;
       if (envelope.ok === false) {
-        throw new Error(
-          `MCP tool error ${envelope.code || ""}: ${envelope.message || JSON.stringify(envelope)}`,
-        );
+        const isRetryable =
+          envelope.code === 429 ||
+          envelope.code === 500 ||
+          envelope.code === 502 ||
+          envelope.code === 503 ||
+          envelope.code === 504;
+        throw new McpError({
+          code: envelope.code ?? "TOOL_ERROR",
+          message:
+            envelope.message ||
+            `MCP tool error ${envelope.code || ""}: ${JSON.stringify(envelope)}`,
+          isRetryable,
+        });
       }
       if (envelope.data !== undefined) {
         parsed = envelope.data;
