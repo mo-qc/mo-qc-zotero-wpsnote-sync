@@ -520,9 +520,13 @@ export async function syncSelectedItems(
     throw new Error("请先在 Zotero 中选择至少一条文献条目或一个文件夹。");
   }
 
-  const concurrency =
+  const rawConcurrency =
     options?.concurrency ??
     Number(getPref("syncConcurrency") || DEFAULT_SYNC_CONCURRENCY);
+  const concurrency =
+    Number.isFinite(rawConcurrency) && rawConcurrency >= 1
+      ? rawConcurrency
+      : DEFAULT_SYNC_CONCURRENCY;
 
   return runWithConcurrency<Zotero.Item, SyncResult>(
     items,

@@ -131,4 +131,45 @@ describe("runWithConcurrency", function () {
 
     expect(caughtError).to.be.true;
   });
+
+  it("falls back to default concurrency for invalid values", async function () {
+    let maxRunning = 0;
+    let running = 0;
+    const items = [1, 2, 3, 4];
+
+    await runWithConcurrency(
+      items,
+      async () => {
+        running += 1;
+        maxRunning = Math.max(maxRunning, running);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running -= 1;
+      },
+      {
+        // @ts-expect-error testing invalid value
+        concurrency: "invalid",
+      },
+    );
+
+    expect(maxRunning).to.be.at.most(2);
+  });
+
+  it("falls back to default concurrency for zero or negative values", async function () {
+    let maxRunning = 0;
+    let running = 0;
+    const items = [1, 2, 3, 4];
+
+    await runWithConcurrency(
+      items,
+      async () => {
+        running += 1;
+        maxRunning = Math.max(maxRunning, running);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running -= 1;
+      },
+      { concurrency: 0 },
+    );
+
+    expect(maxRunning).to.be.at.most(2);
+  });
 });

@@ -24,7 +24,10 @@ export async function runWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
   const total = items.length;
-  const concurrency = Math.max(1, options?.concurrency ?? 2);
+  let concurrency = Number(options?.concurrency) || 2;
+  if (!Number.isFinite(concurrency) || concurrency < 1) {
+    concurrency = 2;
+  }
   let index = 0;
   let completed = 0;
 
