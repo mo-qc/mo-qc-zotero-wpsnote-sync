@@ -27,6 +27,7 @@ declare namespace _ZoteroTypes {
       "autoSyncEnabled": boolean;
       "autoSyncOnModify": boolean;
       "autoSyncTag": string;
+      "syncConcurrency": number;
     };
   }
 }

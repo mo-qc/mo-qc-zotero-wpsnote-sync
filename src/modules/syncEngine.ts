@@ -24,6 +24,7 @@ import {
   removeMappedNote,
   SyncMappingEntry,
 } from "./syncMapping";
+import { runWithConcurrency } from "../utils/concurrencyHelper";
 
 export type ConflictResolution = "overwrite" | "skip" | "create-copy";
 
@@ -38,6 +39,7 @@ export interface SyncOptions {
   titleTemplate?: string;
   bodyTemplate?: string;
   include?: ExtractOptions;
+  concurrency?: number;
   onProgress?: (current: number, total: number, title: string) => void;
   onConflict?: (
     item: Zotero.Item,
@@ -502,41 +504,6 @@ export async function syncItem(
 
 const DEFAULT_SYNC_CONCURRENCY = 2;
 
-async function syncItemsWithConcurrency(
-  items: Zotero.Item[],
-  options?: SyncOptions,
-  concurrency = DEFAULT_SYNC_CONCURRENCY,
-): Promise<SyncResult[]> {
-  const results: SyncResult[] = new Array(items.length);
-  const total = items.length;
-  let index = 0;
-  let completed = 0;
-
-  async function worker(): Promise<void> {
-    while (index < total) {
-      if (options?.signal?.aborted) {
-        ztoolkit.log("Sync cancelled by user");
-        return;
-      }
-      const currentIndex = index++;
-      const item = items[currentIndex];
-      const res = await syncItem(item, options);
-      results[currentIndex] = res;
-      completed += 1;
-      options?.onProgress?.(
-        completed,
-        total,
-        String(item.getField("title") || ""),
-      );
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.max(1, concurrency) }, () => worker()),
-  );
-  return results;
-}
-
 export async function syncSelectedItems(
   options?: SyncOptions,
 ): Promise<SyncResult[]> {
@@ -551,5 +518,24 @@ export async function syncSelectedItems(
     throw new Error("请先在 Zotero 中选择至少一条文献条目或一个文件夹。");
   }
 
-  return syncItemsWithConcurrency(items, options);
+  const concurrency =
+    options?.concurrency ??
+    Number(getPref("syncConcurrency") || DEFAULT_SYNC_CONCURRENCY);
+
+  return runWithConcurrency<Zotero.Item, SyncResult>(
+    items,
+    (item) => syncItem(item, options),
+    {
+      concurrency,
+      signal: options?.signal,
+      onAborted: () => ztoolkit.log("Sync cancelled by user"),
+      onProgress: (completed, total, _result, _index, item) => {
+        options?.onProgress?.(
+          completed,
+          total,
+          String(item.getField("title") || ""),
+        );
+      },
+    },
+  );
 }

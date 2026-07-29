@@ -11,6 +11,7 @@ import {
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 import { getAllMappings, removeMappedNote } from "./syncMapping";
+import { runWithConcurrency } from "../utils/concurrencyHelper";
 
 // Zotero 插件环境可能没有全局 AbortController，提供最小 polyfill
 const AbortControllerImpl =
@@ -326,52 +327,48 @@ async function retryFailedItems(itemKeys: string[]) {
     }),
   );
 
-  const results: SyncResult[] = new Array(itemKeys.length);
-  let index = 0;
-  let completed = 0;
-
-  async function worker(): Promise<void> {
-    while (index < entries.length) {
-      const currentIndex = index++;
-      const { key, item } = entries[currentIndex];
+  const results = await runWithConcurrency<
+    { key: string; item?: Zotero.Item },
+    SyncResult
+  >(
+    entries,
+    async ({ key, item }) => {
       if (!item) {
-        results[currentIndex] = {
+        return {
           success: false,
           itemKey: key,
           title: "-",
           error: "未找到对应文献",
         };
-        completed += 1;
-        popup.changeLine({
-          text: `重试中 ${completed}/${itemKeys.length}`,
-        });
-        continue;
       }
-
       try {
-        const res = await syncItem(item, {
+        return await syncItem(item, {
           addTags: parseDefaultTags(),
           updateExisting: true,
         });
-        results[currentIndex] = res;
       } catch (e: any) {
         ztoolkit.log("Batch retry failed", key, e?.message || String(e));
-        results[currentIndex] = {
+        return {
           success: false,
           itemKey: key,
           title: String(item.getField("title") || ""),
           error: e?.message || String(e),
         };
       }
-      completed += 1;
-      popup.changeLine({
-        text: `重试中 ${completed}/${itemKeys.length}：${String(item.getField("title") || "").slice(0, 30)}`,
-      });
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: DEFAULT_RETRY_CONCURRENCY }, () => worker()),
+    },
+    {
+      concurrency: DEFAULT_RETRY_CONCURRENCY,
+      onProgress: (completed, total, _result, _index, { item }) => {
+        const title = item
+          ? String(item.getField("title") || "").slice(0, 30)
+          : "";
+        popup.changeLine({
+          text: title
+            ? `重试中 ${completed}/${total}：${title}`
+            : `重试中 ${completed}/${total}`,
+        });
+      },
+    },
   );
 
   const succeeded = results.filter((r) => r.success).length;

@@ -18,3 +18,4 @@ pref("syncIncludeNotes", true);
 pref("autoSyncEnabled", false);
 pref("autoSyncOnModify", false);
 pref("autoSyncTag", "");
+pref("syncConcurrency", 2);
