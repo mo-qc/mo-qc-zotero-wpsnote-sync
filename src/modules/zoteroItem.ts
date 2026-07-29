@@ -155,6 +155,37 @@ function extractAnnotationField(raw: any, field: string): string {
   return "";
 }
 
+function parseAnnotationPosition(raw: any): {
+  pageIndex?: number;
+  rects?: number[][];
+} {
+  const posStr =
+    extractAnnotationField(raw, "annotationPosition") ||
+    extractAnnotationField(raw, "position");
+  if (!posStr) return {};
+  try {
+    const parsed = JSON.parse(posStr);
+    return {
+      pageIndex:
+        typeof parsed.pageIndex === "number"
+          ? parsed.pageIndex
+          : typeof parsed.page === "number"
+            ? parsed.page
+            : undefined,
+      rects: Array.isArray(parsed.rects) ? parsed.rects : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function extractAnnotationImageKey(raw: any): string | undefined {
+  const key =
+    extractAnnotationField(raw, "imageAttachmentKey") ||
+    extractAnnotationField(raw, "image");
+  return key || undefined;
+}
+
 function extractAnnotations(item: Zotero.Item): ZoteroAnnotation[] {
   const annotations: ZoteroAnnotation[] = [];
   const attIds = item.getAttachments ? item.getAttachments() : [];
@@ -173,27 +204,43 @@ function extractAnnotations(item: Zotero.Item): ZoteroAnnotation[] {
     }
 
     for (const raw of rawAnnotations) {
+      const type =
+        extractAnnotationField(raw, "annotationType") || "highlight";
       const text = normalizeAnnotationText(
         extractAnnotationField(raw, "annotationText"),
       );
       const comment = normalizeAnnotationText(
         extractAnnotationField(raw, "annotationComment"),
       );
-      // 跳过空内容
-      if (!text && !comment) continue;
+      const color = extractAnnotationField(raw, "annotationColor");
+      const pageLabel =
+        extractAnnotationField(raw, "annotationPageLabel") || "0";
+      const sortIndex = extractAnnotationField(raw, "annotationSortIndex");
+      const position = parseAnnotationPosition(raw);
+      const imageAttachmentKey = extractAnnotationImageKey(raw);
+
+      // 跳过完全空内容的批注。
+      // image 类型允许无 text/comment（截图本身即内容）；
+      // ink 类型通常只有墨迹轨迹，若无评论可跳过；
+      // 其他类型允许仅含评论或仅含高亮文本。
+      const hasVisualContent =
+        type === "image" && (Boolean(imageAttachmentKey) || Boolean(text));
+      if (!text && !comment && !hasVisualContent) continue;
 
       annotations.push({
         key: String(raw.key || raw._key || ""),
-        type: extractAnnotationField(raw, "annotationType") || "highlight",
+        type,
         text,
         comment,
-        color: extractAnnotationField(raw, "annotationColor"),
-        pageLabel: extractAnnotationField(raw, "annotationPageLabel") || "0",
-        sortIndex: extractAnnotationField(raw, "annotationSortIndex"),
+        color,
+        pageLabel,
+        sortIndex,
         authorName: extractAnnotationField(raw, "annotationAuthorName"),
         dateAdded: extractAnnotationField(raw, "dateAdded"),
         dateModified: extractAnnotationField(raw, "dateModified"),
         tags: extractAnnotationTags(raw),
+        position,
+        imageAttachmentKey,
       });
     }
   }

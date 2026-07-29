@@ -22,6 +22,30 @@ import { markdownToWpsXml, splitMarkdownByTable } from "./markdown";
 
 export { getDefaultTitleTemplate, getDefaultBodyTemplate };
 
+function enrichAnnotation(a: ZoteroAnnotation) {
+  const commentSplit = a.comment ? splitMarkdownByTable(a.comment) : null;
+  return {
+    ...a,
+    typeLabel: annotationTypeLabel(a.type),
+    textParagraph: a.text ? paragraph(a.text) : "",
+    commentParagraph: a.comment ? paragraph(a.comment) : "",
+    commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
+    commentHasTable: !!commentSplit?.table,
+    commentBeforeTableXml: commentSplit?.before || "",
+    commentTableXml: commentSplit?.table || "",
+    commentAfterTableXml: commentSplit?.after || "",
+    tagsJoined: a.tags.join(" · "),
+    tagsXml: a.tags.map(tagToXml).join(""),
+    hasText: !!a.text,
+    hasComment: !!a.comment,
+    hasImage: a.type === "image" && !!a.imageAttachmentKey,
+    pageIndex:
+      a.position?.pageIndex !== undefined
+        ? String(a.position.pageIndex + 1)
+        : a.pageLabel,
+  };
+}
+
 function annotationTypeLabel(type: string): string {
   if (isChineseLocale()) {
     const labels: Record<string, string> = {
@@ -369,63 +393,16 @@ export function renderItemTemplate(
     urlLink: item.url ? link(item.url, item.url) : "",
     abstractParagraph: item.abstract ? paragraph(item.abstract) : "",
     tagsJoined: item.tags.join(" · "),
-    annotations: item.annotations.map((a) => {
-      const commentSplit = a.comment ? splitMarkdownByTable(a.comment) : null;
-      return {
-        ...a,
-        typeLabel: annotationTypeLabel(a.type),
-        textParagraph: a.text ? paragraph(a.text) : "",
-        commentParagraph: a.comment ? paragraph(a.comment) : "",
-        commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
-        commentHasTable: !!commentSplit?.table,
-        commentBeforeTableXml: commentSplit?.before || "",
-        commentTableXml: commentSplit?.table || "",
-        commentAfterTableXml: commentSplit?.after || "",
-        tagsJoined: a.tags.join(" · "),
-        tagsXml: a.tags.map(tagToXml).join(""),
-      };
-    }),
+    annotations: item.annotations.map((a) => enrichAnnotation(a)),
     annotationGroups: groupAnnotationsByPage(item.annotations).map((g) => ({
       pageLabel: g.pageLabel,
-      items: g.items.map((a) => {
-        const commentSplit = a.comment ? splitMarkdownByTable(a.comment) : null;
-        return {
-          ...a,
-          typeLabel: annotationTypeLabel(a.type),
-          textParagraph: a.text ? paragraph(a.text) : "",
-          commentParagraph: a.comment ? paragraph(a.comment) : "",
-          commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
-          commentHasTable: !!commentSplit?.table,
-          commentBeforeTableXml: commentSplit?.before || "",
-          commentTableXml: commentSplit?.table || "",
-          commentAfterTableXml: commentSplit?.after || "",
-          tagsJoined: a.tags.join(" · "),
-          tagsXml: a.tags.map(tagToXml).join(""),
-        };
-      }),
+      items: g.items.map((a) => enrichAnnotation(a)),
     })),
     annotationGroupsByColor: groupAnnotationsByColor(item.annotations).map(
       (g) => ({
         color: g.color,
         colorName: g.colorName,
-        items: g.items.map((a) => {
-          const commentSplit = a.comment
-            ? splitMarkdownByTable(a.comment)
-            : null;
-          return {
-            ...a,
-            typeLabel: annotationTypeLabel(a.type),
-            textParagraph: a.text ? paragraph(a.text) : "",
-            commentParagraph: a.comment ? paragraph(a.comment) : "",
-            commentXml: a.comment ? markdownToWpsXml(a.comment) : "",
-            commentHasTable: !!commentSplit?.table,
-            commentBeforeTableXml: commentSplit?.before || "",
-            commentTableXml: commentSplit?.table || "",
-            commentAfterTableXml: commentSplit?.after || "",
-            tagsJoined: a.tags.join(" · "),
-            tagsXml: a.tags.map(tagToXml).join(""),
-          };
-        }),
+        items: g.items.map((a) => enrichAnnotation(a)),
       }),
     ),
   };

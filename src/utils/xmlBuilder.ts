@@ -47,6 +47,11 @@ export interface ZoteroAnnotation {
   dateAdded: string;
   dateModified: string;
   tags: string[];
+  position?: {
+    pageIndex?: number;
+    rects?: number[][];
+  };
+  imageAttachmentKey?: string;
 }
 
 export interface ZoteroItemData {
