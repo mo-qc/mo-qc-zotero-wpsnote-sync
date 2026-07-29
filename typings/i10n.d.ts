@@ -3,6 +3,8 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'menu-force-sync-collection-to-wpsnote'
+  | 'menu-force-sync-to-wpsnote'
   | 'menu-sync-collection-to-wpsnote'
   | 'menu-sync-history'
   | 'menu-sync-to-wpsnote'
@@ -22,6 +24,8 @@ export type FluentMessageId =
   | 'pref-mcpInterfaceType-cloud'
   | 'pref-mcpInterfaceType-local'
   | 'pref-promptOnConflict'
+  | 'pref-syncConcurrency'
+  | 'pref-syncConcurrency-help'
   | 'pref-syncInclude-title'
   | 'pref-syncIncludeAbstract'
   | 'pref-syncIncludeAnnotations'
