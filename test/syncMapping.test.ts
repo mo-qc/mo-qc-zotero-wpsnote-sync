@@ -1,4 +1,10 @@
 import { expect } from "chai";
+import type {
+  recordSyncResult as RecordSyncResult,
+  getMappedEntry as GetMappedEntry,
+  getAllMappings as GetAllMappings,
+  removeMappedNote as RemoveMappedNote,
+} from "../src/modules/syncMapping";
 
 const storage: Record<string, any> = {};
 
@@ -16,10 +22,20 @@ const storage: Record<string, any> = {};
   log: () => {},
 };
 
-const { recordSyncResult, getMappedEntry, getAllMappings, removeMappedNote } =
-  await import("../src/modules/syncMapping");
-
 describe("syncMapping", function () {
+  let recordSyncResult: typeof RecordSyncResult;
+  let getMappedEntry: typeof GetMappedEntry;
+  let getAllMappings: typeof GetAllMappings;
+  let removeMappedNote: typeof RemoveMappedNote;
+
+  before(async function () {
+    const mod = await import("../src/modules/syncMapping");
+    recordSyncResult = mod.recordSyncResult;
+    getMappedEntry = mod.getMappedEntry;
+    getAllMappings = mod.getAllMappings;
+    removeMappedNote = mod.removeMappedNote;
+  });
+
   beforeEach(function () {
     Object.keys(storage).forEach((k) => delete storage[k]);
   });

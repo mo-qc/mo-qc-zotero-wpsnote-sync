@@ -1,7 +1,7 @@
 {
   "name": "zotero-wpsnote-sync",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.5",
   "description": "Sync Zotero items, notes, PDF links and annotations to WPS Notes via MCP",
   "config": {
     "addonName": "Zotero → WPS 笔记同步",
@@ -9,7 +9,7 @@
     "addonRef": "zoterowpsnotesync",
     "addonInstance": "ZoteroWPSNoteSync",
     "prefsPrefix": "extensions.zotero.zoterowpsnotesync",
-    "version": "0.1.1"
+    "version": "0.1.5"
   },
   "repository": {
     "type": "git",
@@ -23,10 +23,10 @@
   "license": "AGPL-3.0",
   "scripts": {
     "start": "zotero-plugin serve",
-    "build": "zotero-plugin build && tsc --noEmit",
+    "build": "node scripts/bump-version.mjs && zotero-plugin build && tsc --noEmit",
     "lint:check": "prettier --check . && eslint .",
     "lint:fix": "prettier --write . && eslint . --fix",
-    "release": "zotero-plugin release",
+    "release": "node scripts/bump-version.mjs && zotero-plugin release",
     "test": "zotero-plugin test",
     "test:unit": "tsx node_modules/mocha/bin/mocha.js test/*.test.ts",
     "update-deps": "npm update --save"
