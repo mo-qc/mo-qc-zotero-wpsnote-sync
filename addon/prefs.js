@@ -1,4 +1,5 @@
 pref("mcpInterfaceType", "cloud");
+pref("mcpConfigJson", "");
 pref("wpsMcpEndpoint", "https://ainote.kdocs.cn/mcp-svc/mcp");
 pref("wpsMcpApiKey", "");
 pref("localMcpUrl", "http://127.0.0.1:18930/mcp");

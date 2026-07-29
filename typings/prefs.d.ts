@@ -8,6 +8,7 @@ declare namespace _ZoteroTypes {
   interface Prefs {
     PluginPrefsMap: {
       "mcpInterfaceType": string;
+      "mcpConfigJson": string;
       "wpsMcpEndpoint": string;
       "wpsMcpApiKey": string;
       "localMcpUrl": string;

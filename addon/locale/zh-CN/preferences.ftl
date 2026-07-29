@@ -1,11 +1,7 @@
 pref-title = Zotero → WPS 笔记同步设置
-pref-mcpInterfaceType = MCP 接口类型
-pref-mcpInterfaceType-cloud = 云端 MCP
-pref-mcpInterfaceType-local = 本地 MCP
-pref-wpsMcpEndpoint = 云端 MCP 端点
-pref-wpsMcpApiKey = 云端 API Key
-pref-localMcpUrl = 本地 MCP URL
-pref-localMcpToken = 本地 MCP Token
+pref-mcpConfigJson = MCP JSON 配置
+pref-mcpConfigJson-help = 直接粘贴 MCP 的 JSON 配置即可，支持云端（X-API-Key）与本地（Authorization Bearer / API_KEY）两种格式；留空则沿用下方的旧版配置。
+pref-mcpConfigJson-status-fallback = 未粘贴 JSON，当前使用旧版配置。
 pref-defaultTags = 默认标签
 pref-syncConcurrency = 同步并发数
 pref-syncConcurrency-help = 批量同步时同时处理的文献数量，建议 1-5；数值过大可能触发 WPS 限流

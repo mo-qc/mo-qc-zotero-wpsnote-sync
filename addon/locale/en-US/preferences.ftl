@@ -1,11 +1,7 @@
 pref-title = Zotero → WPS Notes Sync Settings
-pref-mcpInterfaceType = MCP Interface Type
-pref-mcpInterfaceType-cloud = Cloud MCP
-pref-mcpInterfaceType-local = Local MCP
-pref-wpsMcpEndpoint = Cloud MCP Endpoint
-pref-wpsMcpApiKey = Cloud API Key
-pref-localMcpUrl = Local MCP URL
-pref-localMcpToken = Local MCP Token
+pref-mcpConfigJson = MCP JSON Config
+pref-mcpConfigJson-help = Paste your MCP JSON config here. Supports cloud (X-API-Key) and local (Authorization Bearer / API_KEY) formats. Leave empty to fall back to the legacy settings below.
+pref-mcpConfigJson-status-fallback = No JSON pasted; using legacy settings.
 pref-defaultTags = Default Tags
 pref-syncConcurrency = Sync Concurrency
 pref-syncConcurrency-help = Number of items processed simultaneously during batch sync; 1-5 recommended, higher values may trigger WPS rate limits

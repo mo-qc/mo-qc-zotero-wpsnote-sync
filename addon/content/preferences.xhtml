@@ -41,7 +41,11 @@
     overflow: auto; max-height: 240px; } .zws-preview-label { font-size: 12px;
     font-weight: 500; color: #475569; margin: 14px 0 6px 0; display: block; }
     .zws-preview-label:first-child { margin-top: 0; } .zws-hidden { display:
-    none !important; }
+    none !important; } .zws-mcp-status { font-size: 12px; margin-top: 8px;
+    padding: 6px 10px; border-radius: 6px; line-height: 1.5; }
+    .zws-mcp-status.ok { color: #166534; background: #dcfce7; }
+    .zws-mcp-status.error { color: #991b1b; background: #fee2e2; }
+    .zws-mcp-status.fallback { color: #713f12; background: #fef9c3; }
   </html:style>
 
   <html:div class="zws-prefs-root">
@@ -68,86 +72,33 @@
 
     <html:div class="zws-card">
       <html:h3 class="zws-card-title">MCP 连接</html:h3>
-      <html:div class="zws-form-row">
+      <html:div class="zws-form-row zws-top">
         <html:label
           class="zws-label"
-          for="zotero-prefpane-__addonRef__-mcpInterfaceType"
-          data-l10n-id="pref-mcpInterfaceType"
+          for="zotero-prefpane-__addonRef__-mcpConfigJson"
+          data-l10n-id="pref-mcpConfigJson"
         ></html:label>
-        <html:select
-          class="zws-select"
-          id="zotero-prefpane-__addonRef__-mcpInterfaceType"
-          preference="mcpInterfaceType"
-        >
-          <html:option
-            value="cloud"
-            data-l10n-id="pref-mcpInterfaceType-cloud"
-          ></html:option>
-          <html:option
-            value="local"
-            data-l10n-id="pref-mcpInterfaceType-local"
-          ></html:option>
-        </html:select>
-      </html:div>
-
-      <html:div id="zotero-prefpane-__addonRef__-cloud-config">
-        <html:div class="zws-form-row">
-          <html:label
-            class="zws-label"
-            for="zotero-prefpane-__addonRef__-wpsMcpEndpoint"
-            data-l10n-id="pref-wpsMcpEndpoint"
-          ></html:label>
-          <html:input
-            class="zws-input"
-            type="text"
-            id="zotero-prefpane-__addonRef__-wpsMcpEndpoint"
-            preference="wpsMcpEndpoint"
-          ></html:input>
-        </html:div>
-
-        <html:div class="zws-form-row">
-          <html:label
-            class="zws-label"
-            for="zotero-prefpane-__addonRef__-wpsMcpApiKey"
-            data-l10n-id="pref-wpsMcpApiKey"
-          ></html:label>
-          <html:input
-            class="zws-input"
-            type="password"
-            id="zotero-prefpane-__addonRef__-wpsMcpApiKey"
-          ></html:input>
-        </html:div>
-      </html:div>
-
-      <html:div
-        id="zotero-prefpane-__addonRef__-local-config"
-        class="zws-hidden"
-      >
-        <html:div class="zws-form-row">
-          <html:label
-            class="zws-label"
-            for="zotero-prefpane-__addonRef__-localMcpUrl"
-            data-l10n-id="pref-localMcpUrl"
-          ></html:label>
-          <html:input
-            class="zws-input"
-            type="text"
-            id="zotero-prefpane-__addonRef__-localMcpUrl"
-            preference="localMcpUrl"
-          ></html:input>
-        </html:div>
-
-        <html:div class="zws-form-row">
-          <html:label
-            class="zws-label"
-            for="zotero-prefpane-__addonRef__-localMcpToken"
-            data-l10n-id="pref-localMcpToken"
-          ></html:label>
-          <html:input
-            class="zws-input"
-            type="password"
-            id="zotero-prefpane-__addonRef__-localMcpToken"
-          ></html:input>
+        <html:div style="flex: 1; min-width: 0">
+          <html:textarea
+            class="zws-textarea"
+            id="zotero-prefpane-__addonRef__-mcpConfigJson"
+            preference="mcpConfigJson"
+            rows="8"
+            style="
+              font-family:
+                &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
+                &quot;Roboto Mono&quot;, Consolas, monospace;
+            "
+          ></html:textarea>
+          <html:p
+            class="zws-help-text"
+            data-l10n-id="pref-mcpConfigJson-help"
+          ></html:p>
+          <html:p
+            id="zotero-prefpane-__addonRef__-mcpConfigStatus"
+            class="zws-mcp-status fallback"
+            data-l10n-id="pref-mcpConfigJson-status-fallback"
+          ></html:p>
         </html:div>
       </html:div>
     </html:div>

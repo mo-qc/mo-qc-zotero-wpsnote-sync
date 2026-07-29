@@ -1,12 +1,7 @@
 import { config } from "../../package.json";
 import { buildNoteTitle, buildNoteXml } from "../utils/xmlBuilder";
 import type { ZoteroItemData } from "../utils/xmlBuilder";
-import {
-  getApiKey,
-  setApiKey,
-  getLocalMcpToken,
-  setLocalMcpToken,
-} from "../utils/prefs";
+import { getMcpConfig, parseMcpConfigJson } from "../utils/prefs";
 
 export async function registerPrefsScripts(_window: Window) {
   addon.data.prefs = {
@@ -88,28 +83,6 @@ function getElement<T extends HTMLElement>(id: string): T | null {
   return doc.getElementById(id) as T | null;
 }
 
-function updateInterfaceTypeVisibility() {
-  const typeSelect = getElement<HTMLSelectElement>(
-    `zotero-prefpane-${config.addonRef}-mcpInterfaceType`,
-  );
-  const cloudBox = getElement<HTMLElement>(
-    `zotero-prefpane-${config.addonRef}-cloud-config`,
-  );
-  const localBox = getElement<HTMLElement>(
-    `zotero-prefpane-${config.addonRef}-local-config`,
-  );
-  if (!typeSelect || !cloudBox || !localBox) return;
-
-  const isLocal = typeSelect.value === "local";
-  if (isLocal) {
-    cloudBox.classList.add("zws-hidden");
-    localBox.classList.remove("zws-hidden");
-  } else {
-    localBox.classList.add("zws-hidden");
-    cloudBox.classList.remove("zws-hidden");
-  }
-}
-
 function bindPrefEvents() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
@@ -120,47 +93,57 @@ function bindPrefEvents() {
   const bodyInput = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-bodyTemplate`,
   ) as HTMLTextAreaElement | null;
-  const apiKeyInput = doc.getElementById(
-    `zotero-prefpane-${config.addonRef}-wpsMcpApiKey`,
-  ) as HTMLInputElement | null;
-  const localTokenInput = doc.getElementById(
-    `zotero-prefpane-${config.addonRef}-localMcpToken`,
-  ) as HTMLInputElement | null;
-  const typeSelect = doc.getElementById(
-    `zotero-prefpane-${config.addonRef}-mcpInterfaceType`,
-  ) as HTMLSelectElement | null;
+  const mcpConfigInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpConfigJson`,
+  ) as HTMLTextAreaElement | null;
+  const mcpConfigStatus = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpConfigStatus`,
+  ) as HTMLParagraphElement | null;
 
   const refresh = () => refreshTemplatePreview();
 
   titleInput?.addEventListener("input", refresh);
   bodyInput?.addEventListener("input", refresh);
 
-  // 云端 API Key 需要手动读写，以便进行简单的混淆存储
-  if (apiKeyInput) {
-    apiKeyInput.value = getApiKey();
-    apiKeyInput.addEventListener("change", () => {
-      setApiKey(apiKeyInput.value);
+  // MCP JSON 配置实时校验与状态提示
+  if (mcpConfigInput && mcpConfigStatus) {
+    updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
+    mcpConfigInput.addEventListener("input", () => {
+      updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
     });
-  }
-
-  // 本地 MCP Token 同样需要简单混淆存储
-  if (localTokenInput) {
-    localTokenInput.value = getLocalMcpToken();
-    localTokenInput.addEventListener("change", () => {
-      setLocalMcpToken(localTokenInput.value);
-    });
-  }
-
-  // 接口类型切换时动态显隐对应配置区域
-  if (typeSelect) {
-    updateInterfaceTypeVisibility();
-    typeSelect.addEventListener("change", () => {
-      updateInterfaceTypeVisibility();
-      refresh();
+    mcpConfigInput.addEventListener("change", () => {
+      updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
     });
   }
 
   ztoolkit.log("Preference window loaded", config.addonRef);
+}
+
+function updateMcpConfigStatus(
+  input: HTMLTextAreaElement,
+  status: HTMLParagraphElement,
+) {
+  const value = input.value.trim();
+  if (!value) {
+    const config = getMcpConfig();
+    status.className = "zws-mcp-status fallback";
+    status.textContent = `未粘贴 JSON，当前使用旧版${
+      config.interfaceType === "local" ? "本地" : "云端"
+    }配置（${config.endpoint}）。`;
+    return;
+  }
+
+  const parsed = parseMcpConfigJson(value);
+  if (parsed) {
+    status.className = "zws-mcp-status ok";
+    status.textContent = `配置有效：已识别为${
+      parsed.interfaceType === "local" ? "本地" : "云端"
+    } MCP（${parsed.endpoint}）。`;
+  } else {
+    status.className = "zws-mcp-status error";
+    status.textContent =
+      "无法解析 MCP JSON，请检查格式是否包含 mcpServers 与 url/headers。";
+  }
 }
 
 function refreshTemplatePreview() {

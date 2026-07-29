@@ -17,7 +17,7 @@ import {
   ZoteroNote,
   ZoteroNoteImage,
 } from "../utils/xmlBuilder";
-import { getPref, getApiKey, getLocalMcpToken } from "../utils/prefs";
+import { getPref, getMcpConfig } from "../utils/prefs";
 import {
   getMappedEntry,
   recordSyncResult,
@@ -172,26 +172,11 @@ async function syncNoteImages(
 }
 
 function getClient(options?: SyncOptions): WpsMcpClient {
-  const interfaceType =
-    options?.interfaceType ||
-    (String(getPref("mcpInterfaceType") || "cloud") as McpInterfaceType);
+  const config = getMcpConfig();
 
-  let endpoint: string;
-  let apiKey: string;
-
-  if (interfaceType === "local") {
-    endpoint =
-      options?.endpoint ||
-      String(getPref("localMcpUrl") || "http://127.0.0.1:18930/mcp");
-    apiKey = options?.apiKey || getLocalMcpToken();
-  } else {
-    endpoint =
-      options?.endpoint ||
-      String(
-        getPref("wpsMcpEndpoint") || "https://ainote.kdocs.cn/mcp-svc/mcp",
-      );
-    apiKey = options?.apiKey || getApiKey();
-  }
+  const interfaceType = options?.interfaceType || config.interfaceType;
+  const endpoint = options?.endpoint || config.endpoint;
+  const apiKey = options?.apiKey || config.apiKey;
 
   if (!apiKey) {
     const label = interfaceType === "local" ? "本地 MCP Token" : "云端 API Key";
