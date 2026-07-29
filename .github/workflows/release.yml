@@ -51,7 +51,23 @@ jobs:
           generate_release_notes: true
           files: |
             .scaffold/build/*.xpi
-            .scaffold/build/update.json
-            .scaffold/build/update-beta.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # update.json / update-beta.json 使用固定的 release tag，
+      # 这样插件 manifest 中的 updateURL 不需要随版本变化。
+      - name: Create or update release tag for update manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f release
+          git push -f origin release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload update manifests to release tag
+        run: |
+          gh release create release --title "Latest update manifests" --notes "Auto-updated update.json for the latest release." || true
+          gh release upload release .scaffold/build/update.json .scaffold/build/update-beta.json --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
