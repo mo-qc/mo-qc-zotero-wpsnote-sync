@@ -81,4 +81,69 @@ describe("renderItemTemplate", function () {
     const result = renderItemTemplate("{{custom-field}}", item);
     expect(result).to.equal("custom-value");
   });
+
+  it("exposes annotation boolean flags", function () {
+    const item = makeItem({
+      annotations: [
+        {
+          key: "ANN1",
+          type: "highlight",
+          text: "highlighted text",
+          comment: "my comment",
+          color: "#ffd400",
+          pageLabel: "1",
+          sortIndex: "00001",
+          authorName: "Alice",
+          dateAdded: "2025-07-27",
+          dateModified: "2025-07-27",
+          tags: ["important"],
+          position: { pageIndex: 0 },
+        },
+      ],
+    });
+    const result = renderItemTemplate(
+      "{{#each annotations}}{{typeLabel}}|{{hasText}}|{{hasComment}}|{{hasImage}}|{{pageIndex}}|{{/each}}",
+      item,
+    );
+    expect(result).to.equal("Highlight|true|true|false|1|");
+  });
+
+  it("groups annotations by color", function () {
+    const item = makeItem({
+      annotations: [
+        {
+          key: "ANN1",
+          type: "highlight",
+          text: "a",
+          comment: "",
+          color: "#ff6666",
+          pageLabel: "1",
+          sortIndex: "00001",
+          authorName: "Alice",
+          dateAdded: "2025-07-27",
+          dateModified: "2025-07-27",
+          tags: [],
+        },
+        {
+          key: "ANN2",
+          type: "highlight",
+          text: "b",
+          comment: "",
+          color: "#5fb236",
+          pageLabel: "2",
+          sortIndex: "00002",
+          authorName: "Alice",
+          dateAdded: "2025-07-27",
+          dateModified: "2025-07-27",
+          tags: [],
+        },
+      ],
+    });
+    const result = renderItemTemplate(
+      "{{#each annotationGroupsByColor}}{{colorName}}:{{items.length}};{{/each}}",
+      item,
+    );
+    expect(result).to.include("Red:1");
+    expect(result).to.include("Green:1");
+  });
 });
