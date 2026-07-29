@@ -335,9 +335,11 @@ export class WpsMcpClient {
         ztoolkit.log("MCP initialize response", xhr.status, text.slice(0, 800));
 
         if (xhr.status < 200 || xhr.status >= 300) {
-          throw new Error(
-            `MCP initialize HTTP ${xhr.status}: ${text.slice(0, 200)}`,
-          );
+          throw new McpError({
+            code: xhr.status,
+            message: `MCP initialize HTTP ${xhr.status}: ${text.slice(0, 200)}`,
+            isRetryable: xhr.status >= 500 || xhr.status === 429,
+          });
         }
 
         const sessionId = this.getResponseHeader(xhr, "Mcp-Session-Id");
@@ -351,12 +353,18 @@ export class WpsMcpClient {
 
         const parsed = parseMcpSseResponse(text, initId);
         if (!parsed) {
-          throw new Error("MCP initialize response is empty");
+          throw new McpError({
+            code: "EMPTY_RESPONSE",
+            message: "MCP initialize response is empty",
+            isRetryable: true,
+          });
         }
         if (parsed.error) {
-          throw new Error(
-            `MCP initialize error: ${JSON.stringify(parsed.error)}`,
-          );
+          throw new McpError({
+            code: parsed.error.code,
+            message: `MCP initialize error: ${parsed.error.message}`,
+            isRetryable: false,
+          });
         }
 
         ztoolkit.log("MCP initialized", parsed.result);

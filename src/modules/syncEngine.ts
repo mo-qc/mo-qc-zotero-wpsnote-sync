@@ -278,6 +278,8 @@ function classifyError(err: any): SyncErrorType {
   if (
     msg.includes("mcp error") ||
     msg.includes("mcp tool error") ||
+    msg.includes("mcp initialize") ||
+    msg.includes("initialize http") ||
     msg.includes("未配置") ||
     msg.includes("未提供") ||
     msg.includes("未返回") ||
@@ -285,7 +287,10 @@ function classifyError(err: any): SyncErrorType {
     msg.includes("token") ||
     msg.includes("认证") ||
     msg.includes("鉴权") ||
-    msg.includes("unauthorized")
+    msg.includes("unauthorized") ||
+    msg.includes("invalid") ||
+    msg.includes("expired") ||
+    msg.includes("bad request")
   ) {
     return "mcp";
   }

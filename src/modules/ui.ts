@@ -63,7 +63,10 @@ function errorActionAdvice(type?: string, code?: number | string): string {
   }
   if (type === "mcp") {
     if (code === 401 || code === 403 || code === "UNAUTHORIZED") {
-      return "建议：请检查 WPS 笔记 API Key / Token 是否有效。";
+      return "建议：WPS 笔记 API Key / Token 无效或已过期，请重新生成并填入插件设置。";
+    }
+    if (code === 400 || code === "BAD_REQUEST") {
+      return "建议：请求被 WPS MCP 拒绝，请检查 API Key 是否对应正确的云端/本地接口，或重新生成 Token。";
     }
     if (code === 429 || code === "RATE_LIMIT") {
       return "建议：请求过于频繁，请稍后再试。";
@@ -71,7 +74,7 @@ function errorActionAdvice(type?: string, code?: number | string): string {
     if (code === "INVALID_CONTENT") {
       return "建议：内容格式错误，请检查模板或联系开发者。";
     }
-    return "建议：请检查 MCP 服务状态或同步设置。";
+    return "建议：请检查 MCP 服务状态、接口类型与 API Key / Token 设置。";
   }
   if (type === "image") {
     return "建议：图片上传失败，请检查图片链接是否可访问。";
