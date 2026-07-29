@@ -33,9 +33,7 @@
       "owner": "sub-agent",
       "repairScope": "targeted-token-replace",
       "strategy": "targeted_token_replace_once",
-      "affectedFiles": [
-        "history.html"
-      ],
+      "affectedFiles": ["history.html"],
       "repairReportPath": null,
       "repairAlreadyAttempted": false,
       "allowSourceRead": "no-full-html-read",
@@ -46,9 +44,7 @@
       "owner": "sub-agent",
       "repairScope": "targeted-token-replace",
       "strategy": "targeted_token_replace_once",
-      "affectedFiles": [
-        "progress.html"
-      ],
+      "affectedFiles": ["progress.html"],
       "repairReportPath": null,
       "repairAlreadyAttempted": false,
       "allowSourceRead": "no-full-html-read",
@@ -59,9 +55,7 @@
       "owner": "sub-agent",
       "repairScope": "targeted-token-replace",
       "strategy": "targeted_token_replace_once",
-      "affectedFiles": [
-        "settings.html"
-      ],
+      "affectedFiles": ["settings.html"],
       "repairReportPath": null,
       "repairAlreadyAttempted": false,
       "allowSourceRead": "no-full-html-read",

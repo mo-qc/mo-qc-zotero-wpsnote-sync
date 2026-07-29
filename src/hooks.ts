@@ -4,11 +4,14 @@ import { registerMenus, runSync, openSyncHistory } from "./modules/ui";
 import { syncSelectedItems, syncItem } from "./modules/syncEngine";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { getPref } from "./utils/prefs";
+import { getMappedEntry, removeMappedNote } from "./modules/syncMapping";
 
 // Notifier observer ID，用于插件关闭时注销
 let notifierObserverID: string | null = null;
 // 自动同步去重集合，防止同一 item 并发触发多次同步
 const syncingItems = new Set<string>();
+// 自动同步防抖定时器，避免连续 modify 触发多次同步
+const autoSyncTimers = new Map<string, number>();
 // 每个主窗口注入的样式表，窗口卸载时清理
 const styleSheetRegistry = new WeakMap<Window, HTMLLinkElement>();
 
@@ -77,42 +80,75 @@ function onShutdown(): void {
     notifierObserverID = null;
   }
 
+  // 清理未执行的自动同步定时器
+  for (const timerId of autoSyncTimers.values()) {
+    Zotero.clearTimeout(timerId);
+  }
+  autoSyncTimers.clear();
+
   ztoolkit.unregisterAll();
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
   delete Zotero[addon.data.config.addonInstance];
 }
 
-async function onNotify(
-  event: string,
-  type: string,
-  ids: Array<string | number>,
-  extraData: { [key: string]: any },
-) {
-  // 自动同步：当启用且条目标签包含 autoSyncTag 时触发同步
-  if (type !== "item" || event !== "modify") return;
+/**
+ * 根据批注或附件 item 找到其所属的常规文献条目。
+ * 顺序：annotation -> attachment parent -> regular item
+ */
+function resolveRegularItem(item: Zotero.Item): Zotero.Item | undefined {
+  if (!item) return undefined;
 
-  if (!getPref("autoSyncEnabled")) return;
+  if (item.isRegularItem && item.isRegularItem()) {
+    return item;
+  }
 
-  const autoSyncTag = String(getPref("autoSyncTag") || "").trim();
-  if (!autoSyncTag) return;
+  if (item.isAnnotation && item.isAnnotation()) {
+    const parentItem = item.parentItem;
+    if (parentItem && parentItem.isRegularItem && parentItem.isRegularItem()) {
+      return parentItem;
+    }
+    const grandParent =
+      parentItem?.parentID && parentItem.parentID
+        ? Zotero.Items.get(parentItem.parentID)
+        : undefined;
+    if (grandParent?.isRegularItem && grandParent.isRegularItem()) {
+      return grandParent;
+    }
+    return undefined;
+  }
 
-  for (const itemId of ids) {
-    const item = Zotero.Items.get(itemId);
-    if (!item || !item.isRegularItem || !item.isRegularItem()) continue;
+  if (item.isAttachment && item.isAttachment()) {
+    const parentItem = item.parentItem;
+    if (parentItem && parentItem.isRegularItem && parentItem.isRegularItem()) {
+      return parentItem;
+    }
+    return undefined;
+  }
 
-    const tags = item.getTags
-      ? item
-          .getTags()
-          .map((t: any) => String(t.tag || ""))
-          .filter(Boolean)
-      : [];
-    if (!tags.includes(autoSyncTag)) continue;
+  return undefined;
+}
 
-    const itemKey = item.key;
-    if (syncingItems.has(itemKey)) continue;
+function getItemTags(item: Zotero.Item): string[] {
+  return item.getTags
+    ? item
+        .getTags()
+        .map((t: any) => String(t.tag || ""))
+        .filter(Boolean)
+    : [];
+}
+
+function scheduleAutoSync(item: Zotero.Item, delay = 2000): void {
+  const itemKey = item.key;
+  const existing = autoSyncTimers.get(itemKey);
+  if (existing) {
+    Zotero.clearTimeout(existing);
+  }
+
+  const timerId = Zotero.setTimeout(async () => {
+    autoSyncTimers.delete(itemKey);
+    if (syncingItems.has(itemKey)) return;
     syncingItems.add(itemKey);
-
     try {
       await syncItem(item, {
         addTags: ["Zotero"],
@@ -123,6 +159,43 @@ async function onNotify(
     } finally {
       syncingItems.delete(itemKey);
     }
+  }, delay);
+
+  autoSyncTimers.set(itemKey, timerId);
+}
+
+async function onNotify(
+  event: string,
+  type: string,
+  ids: Array<string | number>,
+  extraData: { [key: string]: any },
+) {
+  // 自动同步：监听 item 的 add/modify 事件
+  if (type !== "item" || (event !== "modify" && event !== "add")) return;
+
+  if (!getPref("autoSyncEnabled")) return;
+
+  const autoSyncTag = String(getPref("autoSyncTag") || "").trim();
+  const autoSyncOnModify = Boolean(getPref("autoSyncOnModify"));
+  if (!autoSyncTag && !autoSyncOnModify) return;
+
+  for (const itemId of ids) {
+    const rawItem = Zotero.Items.get(itemId);
+    if (!rawItem) continue;
+
+    // 批注/附件修改时，需要找到其归属的常规条目
+    const item = resolveRegularItem(rawItem);
+    if (!item) continue;
+
+    const itemKey = item.key;
+    if (syncingItems.has(itemKey)) continue;
+
+    const tags = getItemTags(item);
+    const shouldSyncByTag = autoSyncTag && tags.includes(autoSyncTag);
+    const shouldSyncByModify = autoSyncOnModify && event === "modify";
+    if (!shouldSyncByTag && !shouldSyncByModify) continue;
+
+    scheduleAutoSync(item);
   }
 }
 

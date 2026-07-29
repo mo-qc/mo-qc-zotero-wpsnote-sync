@@ -117,7 +117,11 @@ function parseMcpSseResponse(
   if (match) return match;
 
   // 兜底：返回第一个含 result/error 的事件
-  return events.find((e) => "result" in e || "error" in e) || events[0] || {};
+  return (
+    events.find((e) => e.result !== undefined || e.error !== undefined) ||
+    events[0] ||
+    {}
+  );
 }
 
 export class WpsMcpClient {
@@ -265,7 +269,7 @@ export class WpsMcpClient {
           method,
           err?.message || String(err),
         );
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await new Promise((resolve) => Zotero.setTimeout(resolve, delay));
       }
     }
 
@@ -382,18 +386,36 @@ export class WpsMcpClient {
     return this.tools.includes(name);
   }
 
-  async callTool(
-    name: string,
-    args: Record<string, any>,
-  ): Promise<McpToolResult> {
-    await this.initialize();
+  /**
+   * 重置初始化状态，用于 session 过期或接口配置变更后重新握手。
+   */
+  reset(): void {
+    this.initialized = false;
+    this.initializingPromise = null;
+    this.sessionId = undefined;
+    this.tools = [];
+  }
 
-    const result = await this.post(
-      "tools/call",
-      { name, arguments: args },
-      this.nextId(),
+  private isSessionOrInitError(err: unknown): boolean {
+    const msg = String((err as any)?.message || "").toLowerCase();
+    const code = (err as any)?.code;
+    if (
+      code === "SESSION_EXPIRED" ||
+      code === "INVALID_SESSION" ||
+      code === "NOT_INITIALIZED" ||
+      code === "SESSION_NOT_FOUND"
+    ) {
+      return true;
+    }
+    return (
+      msg.includes("session") ||
+      msg.includes("initialized") ||
+      msg.includes("not initialized") ||
+      msg.includes("initialize")
     );
+  }
 
+  private parseToolResult(result: unknown): McpToolResult {
     // WPS 笔记 MCP 返回的 result 中，业务数据在 content[].text 的 JSON 里，
     // 新版同时提供 structuredContent；优先取 structuredContent，再解析 text。
     // 本地 streamable_http 返回统一响应信封 { ok, code, data, ... }，需解包 data。
@@ -449,6 +471,38 @@ export class WpsMcpClient {
     }
 
     return (parsed as McpToolResult) || {};
+  }
+
+  async callTool(
+    name: string,
+    args: Record<string, any>,
+  ): Promise<McpToolResult> {
+    await this.initialize();
+
+    try {
+      const result = await this.post(
+        "tools/call",
+        { name, arguments: args },
+        this.nextId(),
+      );
+      return this.parseToolResult(result);
+    } catch (err: any) {
+      if (this.isSessionOrInitError(err)) {
+        ztoolkit.log(
+          "MCP session/init error, resetting and retrying once",
+          err?.message || String(err),
+        );
+        this.reset();
+        await this.initialize();
+        const result = await this.post(
+          "tools/call",
+          { name, arguments: args },
+          this.nextId(),
+        );
+        return this.parseToolResult(result);
+      }
+      throw err;
+    }
   }
 
   async createNote(
@@ -521,7 +575,10 @@ export class WpsMcpClient {
     }
 
     const operations: any[] = [];
-    const blockIdsToDelete = blocks.slice(1).map((b: any) => b.id);
+    const blockIdsToDelete = blocks
+      .slice(1)
+      .map((b: any) => b.id)
+      .filter(Boolean);
     const DELETE_BATCH_SIZE = 50;
     for (let i = 0; i < blockIdsToDelete.length; i += DELETE_BATCH_SIZE) {
       operations.push({

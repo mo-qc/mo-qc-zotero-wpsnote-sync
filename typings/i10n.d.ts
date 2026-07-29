@@ -7,6 +7,7 @@ export type FluentMessageId =
   | 'menu-sync-history'
   | 'menu-sync-to-wpsnote'
   | 'pref-autoSyncEnabled'
+  | 'pref-autoSyncOnModify'
   | 'pref-autoSyncTag'
   | 'pref-autoSyncTag-help'
   | 'pref-bodyPreview'

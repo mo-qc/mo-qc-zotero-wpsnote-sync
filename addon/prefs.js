@@ -16,4 +16,5 @@ pref("syncIncludeAnnotations", true);
 pref("syncIncludeTags", true);
 pref("syncIncludeNotes", true);
 pref("autoSyncEnabled", false);
+pref("autoSyncOnModify", false);
 pref("autoSyncTag", "");

@@ -16,3 +16,11 @@ declare const rootURI: string;
 declare const addon: import("../src/addon").default;
 
 declare const __env__: "production" | "development";
+
+// XPCOM 全局变量，Zotero 插件环境可用
+/* eslint-disable no-var */
+declare var Components: any;
+declare var Cc: typeof Components.classes;
+declare var Ci: typeof Components.interfaces;
+declare var Services: any;
+/* eslint-enable no-var */

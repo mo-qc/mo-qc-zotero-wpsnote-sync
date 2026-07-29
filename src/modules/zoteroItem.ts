@@ -204,8 +204,7 @@ function extractAnnotations(item: Zotero.Item): ZoteroAnnotation[] {
     }
 
     for (const raw of rawAnnotations) {
-      const type =
-        extractAnnotationField(raw, "annotationType") || "highlight";
+      const type = extractAnnotationField(raw, "annotationType") || "highlight";
       const text = normalizeAnnotationText(
         extractAnnotationField(raw, "annotationText"),
       );
@@ -245,11 +244,20 @@ function extractAnnotations(item: Zotero.Item): ZoteroAnnotation[] {
     }
   }
 
-  // 按页码、再按位置排序
+  // 按页码、再按位置排序。页码可能是数字或罗马数字，做健壮比较。
   annotations.sort((a, b) => {
-    const pageDiff = Number(a.pageLabel) - Number(b.pageLabel);
-    if (pageDiff !== 0) return pageDiff;
-    return a.sortIndex.localeCompare(b.sortIndex);
+    const pageA = Number(a.pageLabel);
+    const pageB = Number(b.pageLabel);
+    if (!Number.isNaN(pageA) && !Number.isNaN(pageB)) {
+      const pageDiff = pageA - pageB;
+      if (pageDiff !== 0) return pageDiff;
+    } else {
+      const pageCompare = String(a.pageLabel).localeCompare(
+        String(b.pageLabel),
+      );
+      if (pageCompare !== 0) return pageCompare;
+    }
+    return String(a.sortIndex).localeCompare(String(b.sortIndex));
   });
 
   return annotations;

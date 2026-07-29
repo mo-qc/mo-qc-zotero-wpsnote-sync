@@ -25,6 +25,7 @@ declare namespace _ZoteroTypes {
       "syncIncludeTags": boolean;
       "syncIncludeNotes": boolean;
       "autoSyncEnabled": boolean;
+      "autoSyncOnModify": boolean;
       "autoSyncTag": string;
     };
   }

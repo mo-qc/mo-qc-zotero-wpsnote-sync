@@ -299,25 +299,26 @@ export async function syncItem(
   item: Zotero.Item,
   options?: SyncOptions,
 ): Promise<SyncResult> {
-  const titleTemplate =
-    options?.titleTemplate || String(getPref("titleTemplate") || "");
-  const bodyTemplate =
-    options?.bodyTemplate || String(getPref("bodyTemplate") || "");
-
-  const include = options?.include ?? getDefaultExtractOptions();
-  const data = extractItemData(item, include);
-  const title = buildNoteTitle(data, titleTemplate);
-  const xml = buildNoteXml(data, bodyTemplate);
-
   const result: SyncResult = {
     success: false,
     itemKey: item.key,
-    title: data.title,
+    title: String(item.getField("title") || ""),
   };
-
   const itemModified = getItemModifiedTime(item);
 
   try {
+    const titleTemplate =
+      options?.titleTemplate || String(getPref("titleTemplate") || "");
+    const bodyTemplate =
+      options?.bodyTemplate || String(getPref("bodyTemplate") || "");
+
+    const include = options?.include ?? getDefaultExtractOptions();
+    const data = extractItemData(item, include);
+    const title = buildNoteTitle(data, titleTemplate);
+    const xml = buildNoteXml(data, bodyTemplate);
+
+    result.title = data.title;
+
     checkCancelled(options?.signal);
     const client = getClient(options);
     let noteId: string | undefined;
@@ -487,7 +488,7 @@ export async function syncItem(
 
   recordSyncResult(item.key, {
     success: result.success,
-    title: data.title,
+    title: result.title,
     noteId: result.noteId,
     noteUrl: result.noteUrl,
     itemModified,

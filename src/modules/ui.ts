@@ -189,6 +189,45 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function openUrlSafely(url: string): void {
+  try {
+    if (typeof (Zotero as any).launchURL === "function") {
+      (Zotero as any).launchURL(url);
+      return;
+    }
+  } catch (e: any) {
+    ztoolkit.log("Zotero.launchURL failed", url, e?.message || String(e));
+  }
+
+  try {
+    const internal = (Zotero as any).Utilities?.Internal;
+    if (typeof internal?.openURL === "function") {
+      internal.openURL(url);
+      return;
+    }
+  } catch (e: any) {
+    ztoolkit.log(
+      "Zotero.Utilities.Internal.openURL failed",
+      url,
+      e?.message || String(e),
+    );
+  }
+
+  // 兜底：使用系统默认浏览器打开
+  try {
+    const { nsIScriptSecurityManager } = Components.interfaces;
+    const uri = Services.io.newURI(url, null, null);
+    const principal = Services.scriptSecurityManager.createNullPrincipal(
+      {} as any,
+    );
+    Cc["@mozilla.org/uriloader/external-protocol-service;1"]
+      .getService(Ci.nsIExternalProtocolService)
+      .loadURI(uri, { triggeringPrincipal: principal } as any);
+  } catch (e: any) {
+    ztoolkit.log("Failed to open URL", url, e?.message || String(e));
+  }
+}
+
 function findItemByKey(key: string): Zotero.Item | undefined {
   try {
     for (const lib of Zotero.Libraries.getAll()) {
@@ -245,7 +284,10 @@ async function retryFailedItems(itemKeys: string[]) {
     closeTime: -1,
     closeOnClick: false,
   })
-    .createLine({ text: `正在重试 ${itemKeys.length} 条失败记录...`, type: "default" })
+    .createLine({
+      text: `正在重试 ${itemKeys.length} 条失败记录...`,
+      type: "default",
+    })
     .show();
 
   const results: SyncResult[] = [];
@@ -264,11 +306,21 @@ async function retryFailedItems(itemKeys: string[]) {
     popup.changeLine({
       text: `重试中 ${i + 1}/${itemKeys.length}：${String(item.getField("title") || "").slice(0, 30)}`,
     });
-    const res = await syncItem(item, {
-      addTags: parseDefaultTags(),
-      updateExisting: true,
-    });
-    results.push(res);
+    try {
+      const res = await syncItem(item, {
+        addTags: parseDefaultTags(),
+        updateExisting: true,
+      });
+      results.push(res);
+    } catch (e: any) {
+      ztoolkit.log("Batch retry failed", key, e?.message || String(e));
+      results.push({
+        success: false,
+        itemKey: key,
+        title: String(item.getField("title") || ""),
+        error: e?.message || String(e),
+      });
+    }
   }
 
   const succeeded = results.filter((r) => r.success).length;
@@ -281,12 +333,27 @@ async function retryFailedItems(itemKeys: string[]) {
   refreshSyncHistory();
 }
 
-function bindHistoryActions(win: Window) {
+function bindHistoryActions(win: Window): () => void {
   const doc = win.document;
+  type ListenerEntry = {
+    target: EventTarget;
+    type: string;
+    listener: EventListener;
+  };
+  const listeners: ListenerEntry[] = [];
+
+  const addListener = (
+    target: EventTarget,
+    type: string,
+    listener: EventListener,
+  ) => {
+    target.addEventListener(type, listener);
+    listeners.push({ target, type, listener });
+  };
 
   // 操作按钮（打开/重试/删除）
   doc.querySelectorAll("[data-history-action]").forEach((el: Element) => {
-    el.addEventListener("click", (ev: Event) => {
+    addListener(el, "click", (ev: Event) => {
       const target = ev.currentTarget as HTMLElement;
       const action = target.dataset.historyAction;
       const itemKey = target.dataset.itemKey;
@@ -295,7 +362,7 @@ function bindHistoryActions(win: Window) {
       if (action === "open-note") {
         const noteUrl = target.dataset.noteUrl;
         if (noteUrl) {
-          Zotero.launchURL(noteUrl);
+          openUrlSafely(noteUrl);
         }
       } else if (action === "retry") {
         (async () => {
@@ -314,21 +381,42 @@ function bindHistoryActions(win: Window) {
           )
             .createLine({ text: "重试同步中...", type: "default" })
             .show();
-          const result = await syncItem(item, {
-            addTags: parseDefaultTags(),
-            updateExisting: true,
-          });
-          popup.close();
-          showResults([result]);
-          refreshSyncHistory();
+          try {
+            const result = await syncItem(item, {
+              addTags: parseDefaultTags(),
+              updateExisting: true,
+            });
+            popup.close();
+            showResults([result]);
+            refreshSyncHistory();
+          } catch (e: any) {
+            popup.close();
+            ztoolkit.log("Retry failed", itemKey, e?.message || String(e));
+            new ztoolkit.ProgressWindow(addon.data.config.addonName, {
+              closeTime: 4000,
+            })
+              .createLine({
+                text: `重试失败：${e?.message || String(e)}`.slice(0, 120),
+                type: "error",
+              })
+              .show();
+          }
         })();
       } else if (action === "clear-mapping") {
         (async () => {
-          const entry = getAllMappings()[itemKey];
-          const confirmed = await confirmDelete(entry?.title || itemKey);
-          if (!confirmed) return;
-          removeMappedNote(itemKey);
-          refreshSyncHistory();
+          try {
+            const entry = getAllMappings()[itemKey];
+            const confirmed = await confirmDelete(entry?.title || itemKey);
+            if (!confirmed) return;
+            removeMappedNote(itemKey);
+            refreshSyncHistory();
+          } catch (e: any) {
+            ztoolkit.log(
+              "Clear mapping failed",
+              itemKey,
+              e?.message || String(e),
+            );
+          }
         })();
       }
     });
@@ -336,42 +424,50 @@ function bindHistoryActions(win: Window) {
 
   // 刷新按钮
   const refreshBtn = doc.getElementById("zws-history-refresh");
-  refreshBtn?.addEventListener("click", () => {
-    refreshSyncHistory();
-  });
+  if (refreshBtn) {
+    addListener(refreshBtn, "click", () => {
+      refreshSyncHistory();
+    });
+  }
 
   // 批量重试失败
   const retryFailedBtn = doc.getElementById("zws-history-retry-failed");
-  retryFailedBtn?.addEventListener("click", () => {
-    const failedKeys: string[] = [];
-    doc.querySelectorAll<HTMLElement>("[data-history-row]").forEach((row: HTMLElement) => {
-      if (row.dataset.status === "failed") {
-        const key = row.dataset.itemKey;
-        if (key) failedKeys.push(key);
+  if (retryFailedBtn) {
+    addListener(retryFailedBtn, "click", () => {
+      const failedKeys: string[] = [];
+      doc
+        .querySelectorAll<HTMLElement>("[data-history-row]")
+        .forEach((row: HTMLElement) => {
+          if (row.dataset.status === "failed") {
+            const key = row.dataset.itemKey;
+            if (key) failedKeys.push(key);
+          }
+        });
+      if (!failedKeys.length) {
+        new ztoolkit.ProgressWindow(addon.data.config.addonName, {
+          closeTime: 2500,
+        })
+          .createLine({ text: "没有失败记录需要重试", type: "default" })
+          .show();
+        return;
       }
+      retryFailedItems(failedKeys);
     });
-    if (!failedKeys.length) {
-      new ztoolkit.ProgressWindow(addon.data.config.addonName, {
-        closeTime: 2500,
-      })
-        .createLine({ text: "没有失败记录需要重试", type: "default" })
-        .show();
-      return;
-    }
-    retryFailedItems(failedKeys);
-  });
+  }
 
   // 搜索框
   const searchInput = doc.getElementById(
     "zws-history-search",
   ) as HTMLInputElement | null;
-  searchInput?.addEventListener("input", () => {
-    applyHistoryFilter(win, searchInput.value.trim());
-  });
+  if (searchInput) {
+    addListener(searchInput, "input", () => {
+      applyHistoryFilter(win, searchInput.value.trim());
+    });
+  }
 
   // 状态筛选按钮
   doc.querySelectorAll("[data-history-filter]").forEach((el: Element) => {
-    el.addEventListener("click", (ev: Event) => {
+    addListener(el, "click", (ev: Event) => {
       const target = ev.currentTarget as HTMLElement;
       const filter = target.dataset.historyFilter || "all";
       doc.querySelectorAll("[data-history-filter]").forEach((btn: Element) => {
@@ -380,26 +476,45 @@ function bindHistoryActions(win: Window) {
       (win as any).__zwsHistoryFilter = filter;
       applyHistoryFilter(
         win,
-        (doc.getElementById("zws-history-search") as HTMLInputElement)?.value?.trim() || "",
+        (
+          doc.getElementById("zws-history-search") as HTMLInputElement
+        )?.value?.trim() || "",
       );
     });
   });
+
+  const cleanup = () => {
+    for (const { target, type, listener } of listeners) {
+      target.removeEventListener(type, listener);
+    }
+    listeners.length = 0;
+  };
+
+  // 窗口卸载时自动清理，同时把缓存引用置空
+  addListener(win, "unload", () => {
+    syncHistoryWindow = null;
+    cleanup();
+  });
+
+  return cleanup;
 }
 
 function applyHistoryFilter(win: Window, keyword: string) {
   const filter = (win as any).__zwsHistoryFilter || "all";
   const lower = keyword.toLowerCase();
-  win.document.querySelectorAll<HTMLElement>("[data-history-row]").forEach((row: HTMLElement) => {
-    const status = row.dataset.status || "";
-    const text = (row.dataset.searchText || "").toLowerCase();
-    const statusMatch =
-      filter === "all" ||
-      (filter === "success" && status === "success") ||
-      (filter === "failed" && status === "failed") ||
-      (filter === "pending" && status === "pending");
-    const keywordMatch = !lower || text.includes(lower);
-    row.style.display = statusMatch && keywordMatch ? "" : "none";
-  });
+  win.document
+    .querySelectorAll<HTMLElement>("[data-history-row]")
+    .forEach((row: HTMLElement) => {
+      const status = row.dataset.status || "";
+      const text = (row.dataset.searchText || "").toLowerCase();
+      const statusMatch =
+        filter === "all" ||
+        (filter === "success" && status === "success") ||
+        (filter === "failed" && status === "failed") ||
+        (filter === "pending" && status === "pending");
+      const keywordMatch = !lower || text.includes(lower);
+      row.style.display = statusMatch && keywordMatch ? "" : "none";
+    });
 }
 
 export function openSyncHistory() {
@@ -621,9 +736,6 @@ ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKe
 
   syncHistoryWindow = win;
   bindHistoryActions(win);
-  win.addEventListener("unload", () => {
-    syncHistoryWindow = null;
-  });
 }
 
 export async function runSync() {
@@ -642,10 +754,11 @@ export async function runSync() {
     .show();
 
   // 关闭进度窗口视为取消同步
-  (popup.win as any).addEventListener?.("unload", () => {
+  const onPopupUnload = () => {
     cancelled = true;
     controller.abort();
-  });
+  };
+  (popup.win as any).addEventListener?.("unload", onPopupUnload);
 
   try {
     resetConflictBatchChoice();
@@ -686,6 +799,7 @@ export async function runSync() {
     popup.startCloseTimer(5000);
   } finally {
     resetConflictBatchChoice();
+    (popup.win as any).removeEventListener?.("unload", onPopupUnload);
   }
 }
 
