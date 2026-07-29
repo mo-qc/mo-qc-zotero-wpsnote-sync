@@ -279,6 +279,8 @@ async function confirmDelete(title: string): Promise<boolean> {
   return (dialogData._lastButtonId || "") === "delete";
 }
 
+const DEFAULT_RETRY_CONCURRENCY = 2;
+
 async function retryFailedItems(itemKeys: string[]) {
   const popup = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
     closeTime: -1,
@@ -290,38 +292,61 @@ async function retryFailedItems(itemKeys: string[]) {
     })
     .show();
 
-  const results: SyncResult[] = [];
-  for (let i = 0; i < itemKeys.length; i++) {
-    const key = itemKeys[i];
-    const item = findItemByKey(key);
-    if (!item) {
-      results.push({
-        success: false,
-        itemKey: key,
-        title: "-",
-        error: "未找到对应文献",
-      });
-      continue;
-    }
-    popup.changeLine({
-      text: `重试中 ${i + 1}/${itemKeys.length}：${String(item.getField("title") || "").slice(0, 30)}`,
-    });
-    try {
-      const res = await syncItem(item, {
-        addTags: parseDefaultTags(),
-        updateExisting: true,
-      });
-      results.push(res);
-    } catch (e: any) {
-      ztoolkit.log("Batch retry failed", key, e?.message || String(e));
-      results.push({
-        success: false,
-        itemKey: key,
-        title: String(item.getField("title") || ""),
-        error: e?.message || String(e),
+  // 先解析 item，保留索引以维持结果顺序
+  const entries: { key: string; item?: Zotero.Item }[] = itemKeys.map(
+    (key) => ({
+      key,
+      item: findItemByKey(key),
+    }),
+  );
+
+  const results: SyncResult[] = new Array(itemKeys.length);
+  let index = 0;
+  let completed = 0;
+
+  async function worker(): Promise<void> {
+    while (index < entries.length) {
+      const currentIndex = index++;
+      const { key, item } = entries[currentIndex];
+      if (!item) {
+        results[currentIndex] = {
+          success: false,
+          itemKey: key,
+          title: "-",
+          error: "未找到对应文献",
+        };
+        completed += 1;
+        popup.changeLine({
+          text: `重试中 ${completed}/${itemKeys.length}`,
+        });
+        continue;
+      }
+
+      try {
+        const res = await syncItem(item, {
+          addTags: parseDefaultTags(),
+          updateExisting: true,
+        });
+        results[currentIndex] = res;
+      } catch (e: any) {
+        ztoolkit.log("Batch retry failed", key, e?.message || String(e));
+        results[currentIndex] = {
+          success: false,
+          itemKey: key,
+          title: String(item.getField("title") || ""),
+          error: e?.message || String(e),
+        };
+      }
+      completed += 1;
+      popup.changeLine({
+        text: `重试中 ${completed}/${itemKeys.length}：${String(item.getField("title") || "").slice(0, 30)}`,
       });
     }
   }
+
+  await Promise.all(
+    Array.from({ length: DEFAULT_RETRY_CONCURRENCY }, () => worker()),
+  );
 
   const succeeded = results.filter((r) => r.success).length;
   popup.changeLine({

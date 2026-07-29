@@ -500,6 +500,43 @@ export async function syncItem(
   return result;
 }
 
+const DEFAULT_SYNC_CONCURRENCY = 2;
+
+async function syncItemsWithConcurrency(
+  items: Zotero.Item[],
+  options?: SyncOptions,
+  concurrency = DEFAULT_SYNC_CONCURRENCY,
+): Promise<SyncResult[]> {
+  const results: SyncResult[] = new Array(items.length);
+  const total = items.length;
+  let index = 0;
+  let completed = 0;
+
+  async function worker(): Promise<void> {
+    while (index < total) {
+      if (options?.signal?.aborted) {
+        ztoolkit.log("Sync cancelled by user");
+        return;
+      }
+      const currentIndex = index++;
+      const item = items[currentIndex];
+      const res = await syncItem(item, options);
+      results[currentIndex] = res;
+      completed += 1;
+      options?.onProgress?.(
+        completed,
+        total,
+        String(item.getField("title") || ""),
+      );
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.max(1, concurrency) }, () => worker()),
+  );
+  return results;
+}
+
 export async function syncSelectedItems(
   options?: SyncOptions,
 ): Promise<SyncResult[]> {
@@ -514,18 +551,5 @@ export async function syncSelectedItems(
     throw new Error("请先在 Zotero 中选择至少一条文献条目或一个文件夹。");
   }
 
-  const results: SyncResult[] = [];
-  const total = items.length;
-  for (let i = 0; i < total; i++) {
-    if (options?.signal?.aborted) {
-      ztoolkit.log("Sync cancelled by user");
-      break;
-    }
-    const item = items[i];
-    options?.onProgress?.(i + 1, total, String(item.getField("title") || ""));
-    const res = await syncItem(item, options);
-    results.push(res);
-  }
-
-  return results;
+  return syncItemsWithConcurrency(items, options);
 }
