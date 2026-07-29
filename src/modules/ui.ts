@@ -56,6 +56,28 @@ function errorTypeLabel(type?: string, code?: number | string): string {
   return prefix + codeLabel;
 }
 
+function errorActionAdvice(type?: string, code?: number | string): string {
+  if (type === "network") {
+    return "建议：检查网络连接，或稍后重试。";
+  }
+  if (type === "mcp") {
+    if (code === 401 || code === 403 || code === "UNAUTHORIZED") {
+      return "建议：请检查 WPS 笔记 API Key / Token 是否有效。";
+    }
+    if (code === 429 || code === "RATE_LIMIT") {
+      return "建议：请求过于频繁，请稍后再试。";
+    }
+    if (code === "INVALID_CONTENT") {
+      return "建议：内容格式错误，请检查模板或联系开发者。";
+    }
+    return "建议：请检查 MCP 服务状态或同步设置。";
+  }
+  if (type === "image") {
+    return "建议：图片上传失败，请检查图片链接是否可访问。";
+  }
+  return "建议：请打开同步历史查看详情。";
+}
+
 let conflictBatchChoice: ConflictResolution | null = null;
 
 async function promptConflict(title: string): Promise<ConflictResolution> {
@@ -161,6 +183,10 @@ function showResults(results: SyncResult[]) {
     popup.createLine({
       text: `${errorTypeLabel(r.errorType, r.errorCode)}「${r.title.slice(0, 20)}」${r.error?.slice(0, 60) || ""}`,
       type: "error",
+    });
+    popup.createLine({
+      text: errorActionAdvice(r.errorType, r.errorCode),
+      type: "default",
     });
   }
   if (failed.length > 2) {
