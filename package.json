@@ -1,7 +1,7 @@
 {
   "name": "zotero-wpsnote-sync",
   "type": "module",
-  "version": "0.1.21",
+  "version": "0.1.23",
   "description": "Sync Zotero items, notes, PDF links and annotations to WPS Notes via MCP",
   "config": {
     "addonName": "Zotero → WPS 笔记同步",
@@ -9,7 +9,7 @@
     "addonRef": "zoterowpsnotesync",
     "addonInstance": "ZoteroWPSNoteSync",
     "prefsPrefix": "extensions.zotero.zoterowpsnotesync",
-    "version": "0.1.21"
+    "version": "0.1.23"
   },
   "repository": {
     "type": "git",
@@ -45,7 +45,7 @@
     "prettier": "^3.7.4",
     "tsx": "^4.23.1",
     "typescript": "^5.9.3",
-    "zotero-plugin-scaffold": "^0.8.2",
+    "zotero-plugin-scaffold": "^0.8.8",
     "zotero-types": "^4.1.0-beta.4"
   },
   "prettier": {
