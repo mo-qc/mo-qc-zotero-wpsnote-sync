@@ -3,6 +3,7 @@ prefs-title = Zotero → WPS 笔记同步
 prefs-source = 项目源码
 menu-sync-to-wpsnote = 同步到 WPS 笔记
 menu-force-sync-to-wpsnote = 强制同步到 WPS 笔记
+menu-pull-from-wpsnote = 从 WPS 拉取笔记（回流到 Zotero）
 menu-sync-collection-to-wpsnote = 同步文件夹到 WPS 笔记
 menu-force-sync-collection-to-wpsnote = 强制同步文件夹到 WPS 笔记
 menu-sync-history = WPS 同步历史

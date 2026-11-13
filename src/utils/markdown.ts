@@ -12,13 +12,13 @@ function inlineMarkdownToXml(text: string): string {
   const placeholders: string[] = [];
   let result = text;
 
-  // 行内 LaTeX 公式：\(...\) 和 $...$
+  // 行内 LaTeX 公式：\(...\) 和 $...$（WPS 官方格式：<latex formula="..."/>）
   result = result.replace(/\\\((.+?)\\\)/g, (_, p1) => {
-    placeholders.push(`<latex>${escapeXml(p1)}</latex>`);
+    placeholders.push(`<latex formula="${escapeXml(p1)}"/>`);
     return `${PLACEHOLDER}${placeholders.length - 1}${PLACEHOLDER}`;
   });
   result = result.replace(/\$([^$\s].*?)\$/g, (_, p1) => {
-    placeholders.push(`<latex>${escapeXml(p1)}</latex>`);
+    placeholders.push(`<latex formula="${escapeXml(p1)}"/>`);
     return `${PLACEHOLDER}${placeholders.length - 1}${PLACEHOLDER}`;
   });
 
@@ -105,7 +105,6 @@ function renderList(
   const firstLine = lines[startIndex];
   const isOrdered = isOrderedListItem(firstLine);
   const isChecklist = isChecklistItem(firstLine);
-  const tag = isChecklist ? "checklist" : isOrdered ? "ol" : "ul";
 
   const items: string[] = [];
   let i = startIndex;
@@ -118,17 +117,22 @@ function renderList(
     if (!isList) break;
 
     const { content, checked } = parseListItem(line);
-    const inner = `<p>${inlineMarkdownToXml(content)}</p>`;
+    const inner = inlineMarkdownToXml(content);
     if (isChecklist) {
+      // WPS 原生 todo 列表：直接输出 p listType="todo"
       items.push(
-        `<li><checkbox ${checked ? 'checked="true"' : ""}/>${inner}</li>`,
+        `<p listType="todo" listLevel="0" checked="${checked ? 1 : 0}">${inner}</p>`,
       );
     } else {
-      items.push(`<li>${inner}</li>`);
+      items.push(`<li><p>${inner}</p></li>`);
     }
     i++;
   }
 
+  if (isChecklist) {
+    return { xml: items.join(""), nextIndex: i };
+  }
+  const tag = isOrdered ? "ol" : "ul";
   return { xml: `<${tag}>${items.join("")}</${tag}>`, nextIndex: i };
 }
 
@@ -140,14 +144,14 @@ function renderBlockLatex(
   // $$...$$ 单行或跨行
   if (line.startsWith("$$") && line.endsWith("$$") && line.length > 4) {
     return {
-      xml: `<p><latex block="true">${escapeXml(line.slice(2, -2).trim())}</latex></p>`,
+      xml: `<p><latex formula="${escapeXml(line.slice(2, -2).trim())}"/></p>`,
       nextIndex: startIndex + 1,
     };
   }
   // \[...\] 单行
   if (line.startsWith("\\[") && line.endsWith("\\]")) {
     return {
-      xml: `<p><latex block="true">${escapeXml(line.slice(2, -2).trim())}</latex></p>`,
+      xml: `<p><latex formula="${escapeXml(line.slice(2, -2).trim())}"/></p>`,
       nextIndex: startIndex + 1,
     };
   }
@@ -157,7 +161,7 @@ function renderBlockLatex(
     if (end > startIndex) {
       const formula = lines.slice(startIndex + 1, end).join("\n");
       return {
-        xml: `<p><latex block="true">${escapeXml(formula.trim())}</latex></p>`,
+        xml: `<p><latex formula="${escapeXml(formula.trim())}"/></p>`,
         nextIndex: end + 1,
       };
     }

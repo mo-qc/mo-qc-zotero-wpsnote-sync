@@ -377,6 +377,13 @@ export function extractItemData(
 
   const annotations = opts.includeAnnotations ? extractAnnotations(item) : [];
 
+  // 回链：优先打开首个 PDF 附件，无 PDF 则在 Zotero 中定位条目
+  const libPart = item.libraryID === 1 ? "library" : `groups/${item.libraryID}`;
+  const firstPdf = attachments.find((a) => a.isPDF);
+  const zoteroLink = firstPdf
+    ? `zotero://open-pdf/${libPart}/items/${firstPdf.key}`
+    : `zotero://select/${libPart}/items/${item.key}`;
+
   return {
     key: item.key,
     title: String(item.getField("title") || ""),
@@ -390,6 +397,7 @@ export function extractItemData(
     url: String(item.getField("url") || ""),
     DOI: String(item.getField("DOI") || ""),
     publicationTitle: String(item.getField("publicationTitle") || ""),
+    zoteroLink,
     tags,
     notes,
     attachments,

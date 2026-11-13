@@ -29,6 +29,10 @@ declare namespace _ZoteroTypes {
       "autoSyncOnModify": boolean;
       "autoSyncTag": string;
       "syncConcurrency": number;
+      "changePollEnabled": boolean;
+      "changePollInterval": number;
+      "mcpServerWriteEnabled": boolean;
+      "mcpServerToken": string;
     };
   }
 }

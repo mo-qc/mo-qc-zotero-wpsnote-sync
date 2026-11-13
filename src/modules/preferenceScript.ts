@@ -11,13 +11,43 @@ import {
   setPref,
 } from "../utils/prefs";
 import { WpsMcpClient } from "./wpsMcpClient";
+import { restartChangePoller } from "./changePoller";
 import { renderSemanticXml } from "../utils/semanticRender";
+import { extractItemData } from "./zoteroItem";
+import { TEMPLATE_PRESETS } from "../utils/template";
+
+/** 预览数据源：真实选中文献（优先）或 null（回退示例） */
+let previewData: { data: ZoteroItemData; label: string } | null = null;
 
 export async function registerPrefsScripts(_window: Window) {
   addon.data.prefs = {
     window: _window,
   };
   bindPrefEvents();
+  await loadSelectedForPreview();
+}
+
+/** 取主窗口当前选中的首条文献作为预览数据源；无选中则回退示例数据 */
+async function loadSelectedForPreview(): Promise<void> {
+  try {
+    const win =
+      Zotero.getMainWindow() ||
+      (Zotero.getMainWindows()[0] as _ZoteroTypes.MainWindow | undefined);
+    const pane = (win as any)?.ZoteroPane;
+    const selected: Zotero.Item[] = pane?.getSelectedItems?.() || [];
+    const item = selected.find((it) => !it.isNote?.() && !it.isAttachment?.());
+    if (!item) {
+      previewData = null;
+    } else {
+      previewData = {
+        data: extractItemData(item),
+        label: `真实文献：${String(item.getField("title") || item.key).slice(0, 40)}`,
+      };
+    }
+  } catch (e: any) {
+    ztoolkit.log("loadSelectedForPreview failed, fallback to example", e);
+    previewData = null;
+  }
   refreshTemplatePreview();
 }
 
@@ -127,6 +157,31 @@ function bindPrefEvents() {
   titleInput?.addEventListener("input", refresh);
   bodyInput?.addEventListener("input", refresh);
 
+  // 用主窗口当前选中文献刷新预览数据源
+  doc
+    .getElementById(`zotero-prefpane-${config.addonRef}-previewRefreshBtn`)
+    ?.addEventListener("click", () => {
+      loadSelectedForPreview();
+    });
+
+  // 模板预设：填充模板框并持久化
+  doc
+    .getElementById(`zotero-prefpane-${config.addonRef}-presetBar`)
+    ?.addEventListener("click", (ev: Event) => {
+      const btn = (ev.target as HTMLElement | null)?.closest(
+        "[data-preset]",
+      ) as HTMLElement | null;
+      const preset = TEMPLATE_PRESETS.find(
+        (p) => p.id === btn?.getAttribute("data-preset"),
+      );
+      if (!preset || !titleInput || !bodyInput) return;
+      titleInput.value = preset.titleTemplate;
+      bodyInput.value = preset.bodyTemplate;
+      setPref("titleTemplate", preset.titleTemplate);
+      setPref("bodyTemplate", preset.bodyTemplate);
+      refresh();
+    });
+
   // 变量 chips：点击在正文模板光标处插入 {{var}}
   const chips = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-varChips`,
@@ -194,6 +249,10 @@ function bindPrefEvents() {
     loadAuthValue();
     refreshMcpStatus();
   });
+  // 改动轮询开关变更后立即重启轮询（关→开即时生效）
+  doc
+    .getElementById(`zotero-prefpane-${config.addonRef}-changePollEnabled`)
+    ?.addEventListener("change", () => restartChangePoller());
   mcpAuthInput?.addEventListener("change", () => {
     const value = mcpAuthInput.value.trim();
     if (currentInterface() === "local") {
@@ -314,7 +373,16 @@ function refreshTemplatePreview() {
 
   if (!titlePreview || !bodyPreview) return;
 
-  const example = createExampleItem();
+  const source = previewData;
+  const example = source ? source.data : createExampleItem();
+  const sourceLabel = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-previewSourceLabel`,
+  );
+  if (sourceLabel) {
+    sourceLabel.textContent = source
+      ? source.label
+      : "示例数据（在 Zotero 中选中文献可切换为真实预览）";
+  }
   try {
     titlePreview.value = buildNoteTitle(example, titleInput?.value || "");
   } catch (e: any) {

@@ -1,8 +1,8 @@
 # Zotero → WPS Notes Sync
 
-[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![zotero target version](https://img.shields.io/badge/Zotero-7%2B-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 
-A Zotero 7 plugin that syncs literature items, notes, PDF links, and annotations to **WPS Notes** via the WPS MCP (Model Context Protocol) endpoint.
+A Zotero 7+ plugin (verified on Zotero 10) that syncs literature items, notes, PDF links, and annotations to **WPS Notes** via the WPS MCP (Model Context Protocol) endpoint, with controlled two-way sync back into Zotero.
 
 [English](README.md) | [简体中文](doc/README-zhCN.md)
 
@@ -18,11 +18,21 @@ A Zotero 7 plugin that syncs literature items, notes, PDF links, and annotations
 - **Sync history**: View the last sync status, WPS Note ID, and any errors.
 - **Cancellable progress**: The sync progress window can be closed to cancel the operation.
 - **Collection sync**: Sync an entire collection/folder at once.
-- **Customizable templates**: Uses a Mustache-like template engine for note title and body.
+- **Customizable templates**: Uses a Mustache-like template engine for note title and body, with preset templates and a live preview rendered from the currently selected item.
+- **Controlled two-way sync**: A background poller detects WPS-side edits (by `update_time` baseline) and asks before pulling them back; manual "Pull from WPS" writes the note into Zotero as a child note, reusing the same child on repeated pulls (no duplicates).
+- **Trash-aware mapping**: If a synced note is deleted in WPS (moved to trash), the mapping and the redundant `ZWS-Note-Id` in the item's `extra` field are cleared and a fresh note is created on the next sync.
+- **Mapping self-healing**: The WPS note id is mirrored into the item's `extra` field, so the mapping survives storage wipes.
+- **MCP config validation**: A "Validate" button checks pasted MCP JSON (format + structure) and performs a real connection test before you save.
+- **Rich semantic output**: Content is rendered with WPS-native blocks (highlight blocks, columns, tables, quotes, code blocks) rather than flattened text.
+- **Auto-sync triggers**: Sync by tag, or automatically re-sync an item a few seconds after its metadata/annotations/child notes change (child-note edits from AI tools are picked up too).
+- **Concurrency control**: Batch sync runs with a configurable worker count to stay within WPS rate limits.
+- **MCP Server endpoint**: The plugin serves a local MCP endpoint at `http://127.0.0.1:23119/wpsnote/mcp` (Streamable HTTP) so external AI clients (Claude, llm-for-zotero, ...) can read sync status, poll WPS changes, and — when explicitly enabled in preferences — trigger sync/pull. Write tools are off by default; an optional access token can be required.
+- **AI chat-driven sync**: Registers `wps_sync_status`, `wps_poll_changes`, `wps_sync_item`, and `wps_pull_note` as agent tools in llm-for-zotero, so you can ask your AI to sync or pull items conversationally (write actions require an in-chat confirmation card).
+- **Better Notes link conversion**: Child notes containing Better Notes `zotero://note/u/<KEY>/` links are rewritten to the target note's WPS URL; unmapped or dead links degrade to plain text.
 
 ## Requirements
 
-- Zotero 7
+- Zotero 7+ (developed and verified on Zotero 10)
 - Node.js LTS
 - A WPS Notes MCP API Key (cloud or local streamable_http endpoint)
 
@@ -81,6 +91,11 @@ Open **Edit → Preferences → Zotero → WPS Notes Sync** in Zotero.
 | Prompt on conflict    | Ask how to handle changed items                               |
 | Sync content switches | Include abstract, attachments, annotations, tags, child notes |
 | Auto-sync tag         | Automatically sync items when this tag is added               |
+| Auto-sync on modify   | Re-sync an item a few seconds after metadata/annotation edits |
+| Sync concurrency      | Parallel workers for batch sync (recommended 1–5)             |
+| WPS change poller     | Periodically check synced notes for WPS-side edits and prompt |
+| MCP Server write      | Allow external MCP clients to call sync/pull tools (off by default) |
+| MCP Server token      | Optional access token required from MCP clients               |
 | Title/Body templates  | Customize output using the template syntax below              |
 
 ### Template Syntax

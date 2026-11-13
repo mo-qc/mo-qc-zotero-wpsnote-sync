@@ -44,18 +44,21 @@ describe("markdown", function () {
     it("converts checklists", function () {
       const result = markdownToWpsXml("- [x] done\n- [ ] todo");
       expect(result).to.equal(
-        '<checklist><li><checkbox checked="true"/><p>done</p></li><li><checkbox /><p>todo</p></li></checklist>',
+        '<p listType="todo" listLevel="0" checked="1">done</p>' +
+          '<p listType="todo" listLevel="0" checked="0">todo</p>',
       );
     });
 
     it("converts block LaTeX", function () {
       const result = markdownToWpsXml("$$E = mc^2$$");
-      expect(result).to.equal('<p><latex block="true">E = mc^2</latex></p>');
+      expect(result).to.equal('<p><latex formula="E = mc^2"/></p>');
     });
 
     it("converts inline LaTeX", function () {
       const result = markdownToWpsXml("energy $E = mc^2$ equation");
-      expect(result).to.equal("<p>energy <latex>E = mc^2</latex> equation</p>");
+      expect(result).to.equal(
+        '<p>energy <latex formula="E = mc^2"/> equation</p>',
+      );
     });
 
     it("converts tables", function () {

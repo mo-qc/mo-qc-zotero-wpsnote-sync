@@ -70,6 +70,8 @@ export interface ZoteroItemData {
   attachments: ZoteroAttachment[];
   annotations: ZoteroAnnotation[];
   citeKey?: string;
+  /** zotero:// 回链：首个 PDF 或条目定位 */
+  zoteroLink?: string;
 }
 
 export function buildNoteTitle(

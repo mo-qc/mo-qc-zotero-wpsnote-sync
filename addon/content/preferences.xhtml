@@ -88,29 +88,34 @@
     background: var(--zws-surface); border: 1px solid var(--zws-border-strong);
     border-radius: 999px; cursor: pointer; transition: all 0.15s; }
     .zws-chip:hover { color: var(--zws-primary); border-color:
-    var(--zws-primary); background: var(--zws-primary-ring); } .zws-view-bar {
-    display: flex; align-items: center; gap: 8px; margin: 14px 0 6px 0; }
-    .zws-view-bar .zws-preview-label { margin: 0; flex: 1; } .zws-view-switch {
-    display: flex; gap: 0; border: 1px solid var(--zws-border-strong);
-    border-radius: var(--zws-radius-md); overflow: hidden; } .zws-view-btn {
-    font-family: var(--zws-font); font-size: 12px; padding: 4px 12px; color:
-    var(--zws-text-secondary); background: var(--zws-bg); border: none; cursor:
-    pointer; transition: all 0.15s; } .zws-view-btn + .zws-view-btn {
-    border-left: 1px solid var(--zws-border-strong); } .zws-view-btn.active {
-    color: #ffffff; background: var(--zws-primary); } .zws-render-view {
-    background: var(--zws-bg); border: 1px solid var(--zws-border-strong);
-    border-radius: var(--zws-radius-md); padding: 12px 14px; font-family:
-    var(--zws-font); font-size: 13px; color: var(--zws-text); line-height: 1.7;
-    overflow: auto; max-height: 360px; min-height: 120px; } .zws-render-view
-    .rv-h { margin: 10px 0 6px 0; font-weight: 600; color: var(--zws-text); }
-    .zws-render-view h1.rv-h { font-size: 18px; } .zws-render-view h2.rv-h {
-    font-size: 16px; } .zws-render-view h3.rv-h, .zws-render-view h4.rv-h,
-    .zws-render-view h5.rv-h, .zws-render-view h6.rv-h { font-size: 14px; }
-    .zws-render-view .rv-p { margin: 4px 0; } .zws-render-view .rv-li {
-    position: relative; } .zws-render-view .rv-marker { position: absolute;
-    left: 0; color: var(--zws-text-muted); } .zws-render-view .rv-quote {
-    margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--zws-primary);
-    color: var(--zws-text-secondary); background: var(--zws-surface); }
+    var(--zws-primary); background: var(--zws-primary-ring); } .zws-preset-hint
+    { font-family: var(--zws-font); font-size: 12px; color:
+    var(--zws-text-secondary); align-self: center; margin-right: 2px; }
+    .zws-view-bar { display: flex; align-items: center; gap: 8px; margin: 14px 0
+    6px 0; } .zws-view-bar .zws-preview-label { margin: 0; flex: 1; }
+    .zws-preview-source { font-size: 11px; color: var(--zws-text-secondary);
+    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space:
+    nowrap; } .zws-view-switch { display: flex; gap: 0; border: 1px solid
+    var(--zws-border-strong); border-radius: var(--zws-radius-md); overflow:
+    hidden; } .zws-view-btn { font-family: var(--zws-font); font-size: 12px;
+    padding: 4px 12px; color: var(--zws-text-secondary); background:
+    var(--zws-bg); border: none; cursor: pointer; transition: all 0.15s; }
+    .zws-view-btn + .zws-view-btn { border-left: 1px solid
+    var(--zws-border-strong); } .zws-view-btn.active { color: #ffffff;
+    background: var(--zws-primary); } .zws-render-view { background:
+    var(--zws-bg); border: 1px solid var(--zws-border-strong); border-radius:
+    var(--zws-radius-md); padding: 12px 14px; font-family: var(--zws-font);
+    font-size: 13px; color: var(--zws-text); line-height: 1.7; overflow: auto;
+    max-height: 360px; min-height: 120px; } .zws-render-view .rv-h { margin:
+    10px 0 6px 0; font-weight: 600; color: var(--zws-text); } .zws-render-view
+    h1.rv-h { font-size: 18px; } .zws-render-view h2.rv-h { font-size: 16px; }
+    .zws-render-view h3.rv-h, .zws-render-view h4.rv-h, .zws-render-view
+    h5.rv-h, .zws-render-view h6.rv-h { font-size: 14px; } .zws-render-view
+    .rv-p { margin: 4px 0; } .zws-render-view .rv-li { position: relative; }
+    .zws-render-view .rv-marker { position: absolute; left: 0; color:
+    var(--zws-text-muted); } .zws-render-view .rv-quote { margin: 6px 0;
+    padding: 4px 12px; border-left: 3px solid var(--zws-primary); color:
+    var(--zws-text-secondary); background: var(--zws-surface); }
     .zws-render-view .rv-code { font-family: var(--zws-font-mono); font-size:
     12px; background: var(--zws-surface); padding: 1px 5px; border-radius: 4px;
     } .zws-render-view .rv-a { color: var(--zws-primary); } .zws-render-view
@@ -424,7 +429,95 @@
     </html:div>
 
     <html:div class="zws-card">
+      <html:h3 class="zws-card-title">WPS 改动提醒</html:h3>
+      <label class="zws-checkbox-row" style="margin-bottom: 12px">
+        <html:input
+          type="checkbox"
+          id="zotero-prefpane-__addonRef__-changePollEnabled"
+          preference="changePollEnabled"
+        ></html:input>
+        <html:label
+          for="zotero-prefpane-__addonRef__-changePollEnabled"
+          data-l10n-id="pref-changePollEnabled"
+        ></html:label>
+      </label>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-changePollInterval"
+          data-l10n-id="pref-changePollInterval"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="number"
+          min="5"
+          id="zotero-prefpane-__addonRef__-changePollInterval"
+          preference="changePollInterval"
+        ></html:input>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-changePoll-help"
+      ></html:p>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">MCP Server（对外接口）</html:h3>
+
+      <label class="zws-checkbox-row" style="margin-bottom: 12px">
+        <html:input
+          type="checkbox"
+          id="zotero-prefpane-__addonRef__-mcpServerWriteEnabled"
+          preference="mcpServerWriteEnabled"
+        ></html:input>
+        <html:label
+          for="zotero-prefpane-__addonRef__-mcpServerWriteEnabled"
+          data-l10n-id="pref-mcpServerWriteEnabled"
+        ></html:label>
+      </label>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-mcpServerToken"
+          data-l10n-id="pref-mcpServerToken"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-mcpServerToken"
+          preference="mcpServerToken"
+          placeholder="留空则不校验"
+        ></html:input>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-mcpServer-help"
+      ></html:p>
+    </html:div>
+
+    <html:div class="zws-card">
       <html:h3 class="zws-card-title">模板与预览</html:h3>
+
+      <html:div
+        class="zws-var-chips"
+        id="zotero-prefpane-__addonRef__-presetBar"
+      >
+        <html:span class="zws-preset-hint">快速模板：</html:span>
+        <html:button type="button" class="zws-chip" data-preset="minimal"
+          >极简卡片</html:button
+        >
+        <html:button type="button" class="zws-chip" data-preset="full"
+          >富文本全量</html:button
+        >
+        <html:button type="button" class="zws-chip" data-preset="annotation"
+          >批注研读版</html:button
+        >
+        <html:button type="button" class="zws-chip" data-preset="notes"
+          >读书笔记版</html:button
+        >
+      </html:div>
 
       <html:div class="zws-form-row">
         <html:label
@@ -523,6 +616,17 @@
           for="zotero-prefpane-__addonRef__-bodyPreview"
           data-l10n-id="pref-bodyPreview"
         ></html:label>
+        <html:span
+          class="zws-preview-source"
+          id="zotero-prefpane-__addonRef__-previewSourceLabel"
+          >示例数据</html:span
+        >
+        <html:button
+          type="button"
+          class="zws-view-btn"
+          id="zotero-prefpane-__addonRef__-previewRefreshBtn"
+          >用选中文献预览</html:button
+        >
         <html:div
           class="zws-view-switch"
           id="zotero-prefpane-__addonRef__-viewSwitch"

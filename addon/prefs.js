@@ -20,3 +20,7 @@ pref("autoSyncEnabled", false);
 pref("autoSyncOnModify", false);
 pref("autoSyncTag", "");
 pref("syncConcurrency", 2);
+pref("changePollEnabled", true);
+pref("changePollInterval", 30);
+pref("mcpServerWriteEnabled", false);
+pref("mcpServerToken", "");

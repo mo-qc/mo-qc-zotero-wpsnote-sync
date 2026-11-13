@@ -31,4 +31,12 @@ pref-titlePreview = Title Preview
 pref-bodyTemplate = Note Body Template (leave blank for default)
 pref-bodyPreview = Body Preview (live)
 pref-bodyTemplate-help = Syntax: double-braces variables are escaped, triple-braces output raw XML; supports if/else and each blocks. Common variables: title, authors, yearOrDate, publicationTitle, itemType, DOI, url, citeKey, itemKey, abstractParagraph, doiLink, urlLink, hasAnnotations, annotationGroupsByColor, hasNotes, contentParagraph, hasTags.
+pref-changePollEnabled = Enable WPS change polling reminders
+pref-changePollInterval = Polling interval (minutes)
+pref-changePoll-help = Periodically check whether synced notes were modified on the WPS side; when changes are found, a dialog asks whether to pull them back to Zotero. Nothing is overwritten automatically.
 pref-help = { $name } Build { $version } { $time }
+
+# MCP Server (external endpoint)
+pref-mcpServerWriteEnabled = Allow external MCP clients to write (sync / pull)
+pref-mcpServerToken = Access token (optional)
+pref-mcpServer-help = The plugin serves an MCP endpoint at 127.0.0.1:23119/wpsnote/mcp for external AI clients (Claude, llm-for-zotero, ...) to read sync status or trigger sync. Write operations are off by default; if a token is set, clients must send Authorization: Bearer <token> or X-API-Key.

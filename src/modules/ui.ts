@@ -5,13 +5,26 @@
 import {
   syncSelectedItems,
   syncItem,
+  getClient,
+  beginOperation,
+  endOperation,
   SyncResult,
   ConflictResolution,
+  ConflictKind,
 } from "./syncEngine";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
-import { getAllMappings, removeMappedNote } from "./syncMapping";
+import {
+  getAllMappings,
+  getMappedEntry,
+  getMappedNote,
+  removeMappedNote,
+  recordPullNoteId,
+  updateNoteModified,
+} from "./syncMapping";
 import { runWithConcurrency } from "../utils/concurrencyHelper";
+import { semanticXmlToZoteroHtml } from "../utils/semanticRender";
+import { getSelectedItems } from "./zoteroItem";
 
 // Zotero 插件环境可能没有全局 AbortController，提供最小 polyfill
 const AbortControllerImpl =
@@ -84,7 +97,10 @@ function errorActionAdvice(type?: string, code?: number | string): string {
 
 let conflictBatchChoice: ConflictResolution | null = null;
 
-async function promptConflict(title: string): Promise<ConflictResolution> {
+async function promptConflict(
+  title: string,
+  kind: ConflictKind = "item",
+): Promise<ConflictResolution> {
   if (conflictBatchChoice) {
     return conflictBatchChoice;
   }
@@ -97,15 +113,21 @@ async function promptConflict(title: string): Promise<ConflictResolution> {
     remember: false,
   };
 
+  const isWps = kind === "wps";
+  const heading = isWps ? "WPS 笔记已修改" : "文献已变更";
+  const body = isWps
+    ? `文献「${escapeHtml(title.slice(0, 40))}」的 WPS 笔记在上次同步后被手工修改过，可能包含你的心得或批注。<br/>覆盖会丢失这些修改；可先跳过，稍后用右键菜单「从 WPS 拉取」取回。`
+    : `文献「${escapeHtml(title.slice(0, 40))}」在 Zotero 中已变更，可能已同步过到 WPS 笔记。`;
+
   const dialog = new (ztoolkit as any).Dialog(2, 1)
     .addCell(0, 0, {
       tag: "div",
       namespace: "html",
       properties: {
         innerHTML: `
-          <div style="font-size:16px;font-weight:600;color:#0f172a;margin:0 0 8px 0;">文献已变更</div>
+          <div style="font-size:16px;font-weight:600;color:#0f172a;margin:0 0 8px 0;">${heading}</div>
           <p style="font-size:13px;line-height:1.6;margin:0;color:#475569;">
-            文献「${escapeHtml(title.slice(0, 40))}」在 Zotero 中已变更，可能已同步过到 WPS 笔记。<br/>
+            ${body}<br/>
             请选择处理方式：
           </p>
         `,
@@ -322,66 +344,78 @@ async function retryFailedItems(itemKeys: string[]) {
     })
     .show();
 
-  // 先解析 item，保留索引以维持结果顺序
-  const entries: { key: string; item?: Zotero.Item }[] = itemKeys.map(
-    (key) => ({
-      key,
-      item: findItemByKey(key),
-    }),
-  );
+  if (!beginOperation("retry")) {
+    popup.changeLine({
+      text: "另一同步/回流操作正在进行，请稍后再试",
+      type: "fail",
+    });
+    popup.startCloseTimer(3000);
+    return;
+  }
+  try {
+    // 先解析 item，保留索引以维持结果顺序
+    const entries: { key: string; item?: Zotero.Item }[] = itemKeys.map(
+      (key) => ({
+        key,
+        item: findItemByKey(key),
+      }),
+    );
 
-  const results = await runWithConcurrency<
-    { key: string; item?: Zotero.Item },
-    SyncResult
-  >(
-    entries,
-    async ({ key, item }) => {
-      if (!item) {
-        return {
-          success: false,
-          itemKey: key,
-          title: "-",
-          error: "未找到对应文献",
-        };
-      }
-      try {
-        return await syncItem(item, {
-          addTags: parseDefaultTags(),
-          updateExisting: true,
-        });
-      } catch (e: any) {
-        ztoolkit.log("Batch retry failed", key, e?.message || String(e));
-        return {
-          success: false,
-          itemKey: key,
-          title: String(item.getField("title") || ""),
-          error: e?.message || String(e),
-        };
-      }
-    },
-    {
-      concurrency: DEFAULT_RETRY_CONCURRENCY,
-      onProgress: (completed, total, _result, _index, { item }) => {
-        const title = item
-          ? String(item.getField("title") || "").slice(0, 30)
-          : "";
-        popup.changeLine({
-          text: title
-            ? `重试中 ${completed}/${total}：${title}`
-            : `重试中 ${completed}/${total}`,
-        });
+    const results = await runWithConcurrency<
+      { key: string; item?: Zotero.Item },
+      SyncResult
+    >(
+      entries,
+      async ({ key, item }) => {
+        if (!item) {
+          return {
+            success: false,
+            itemKey: key,
+            title: "-",
+            error: "未找到对应文献",
+          };
+        }
+        try {
+          return await syncItem(item, {
+            addTags: parseDefaultTags(),
+            updateExisting: true,
+          });
+        } catch (e: any) {
+          ztoolkit.log("Batch retry failed", key, e?.message || String(e));
+          return {
+            success: false,
+            itemKey: key,
+            title: String(item.getField("title") || ""),
+            error: e?.message || String(e),
+          };
+        }
       },
-    },
-  );
+      {
+        concurrency: DEFAULT_RETRY_CONCURRENCY,
+        onProgress: (completed, total, _result, _index, { item }) => {
+          const title = item
+            ? String(item.getField("title") || "").slice(0, 30)
+            : "";
+          popup.changeLine({
+            text: title
+              ? `重试中 ${completed}/${total}：${title}`
+              : `重试中 ${completed}/${total}`,
+          });
+        },
+      },
+    );
 
-  const succeeded = results.filter((r) => r.success).length;
-  popup.changeLine({
-    text: `重试完成：成功 ${succeeded}/${results.length}`,
-    type: succeeded === results.length ? "success" : "default",
-  });
-  popup.startCloseTimer(2000);
-  showResults(results);
-  refreshSyncHistory();
+    const succeeded = results.filter((r) => r.success).length;
+    popup.changeLine({
+      text: `重试完成：成功 ${succeeded}/${results.length}`,
+      type: succeeded === results.length ? "success" : "default",
+    });
+    popup.startCloseTimer(2000);
+    showResults(results);
+    refreshSyncHistory();
+  } finally {
+    endOperation();
+  }
 }
 
 function bindHistoryActions(iframe: HTMLIFrameElement): () => void {
@@ -435,6 +469,14 @@ function bindHistoryActions(iframe: HTMLIFrameElement): () => void {
           )
             .createLine({ text: "重试同步中...", type: "default" })
             .show();
+          if (!beginOperation("retry")) {
+            popup.changeLine({
+              text: "另一同步/回流操作正在进行，请稍后再试",
+              type: "fail",
+            });
+            popup.startCloseTimer(3000);
+            return;
+          }
           try {
             const result = await syncItem(item, {
               addTags: parseDefaultTags(),
@@ -454,6 +496,8 @@ function bindHistoryActions(iframe: HTMLIFrameElement): () => void {
                 type: "error",
               })
               .show();
+          } finally {
+            endOperation();
           }
         })();
       } else if (action === "clear-mapping") {
@@ -1031,6 +1075,132 @@ ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKe
   tryMount();
 }
 
+/**
+ * 从 WPS 拉取笔记内容，写入为该文献的新子笔记（回流）。
+ * 不覆盖已有子笔记，避免丢失 Zotero 侧内容。
+ * @param itemsArg 指定要拉取的条目；缺省时使用当前选中条目。
+ */
+export async function pullFromWps(itemsArg?: Zotero.Item[]) {
+  const items = itemsArg?.length ? itemsArg : getSelectedItems();
+  if (!items.length) {
+    ztoolkit.log("pullFromWps: no items selected");
+    return;
+  }
+
+  const popup = new ztoolkit.ProgressWindow("Zotero → WPS 笔记同步");
+  if (!beginOperation("pull")) {
+    popup.createLine({
+      text: "另一同步/回流操作正在进行，请稍后再试",
+      type: "fail",
+    });
+    popup.show();
+    popup.startCloseTimer(3000);
+    return;
+  }
+  popup.createLine({
+    text: `正在从 WPS 拉取 ${items.length} 篇笔记…`,
+    progress: 0,
+  });
+  popup.show();
+
+  let ok = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  try {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const title = String(item.getField("title") || item.key);
+      const percent = Math.round(((i + 1) / items.length) * 100);
+      const mapped = getMappedNote(item.key);
+      if (!mapped) {
+        skipped++;
+        popup.changeLine({
+          progress: percent,
+          text: `跳过（未同步过）：${title.slice(0, 30)}`,
+          type: "warning",
+        });
+        continue;
+      }
+      try {
+        const client = getClient();
+        // 分页读全（长笔记可能跨多页）
+        let xml = "";
+        let noteTitle = "";
+        let offset = 0;
+        for (let page = 0; page < 50; page++) {
+          const r = await client.readNote(mapped.noteId, offset, 50);
+          if (page === 0) noteTitle = r.title;
+          xml += r.content;
+          if (!r.hasMore) break;
+          offset += 50;
+        }
+        const html = semanticXmlToZoteroHtml(xml);
+        if (!html.trim()) throw new Error("笔记内容解析为空");
+
+        // 复用上次回流写入的子笔记（存在且仍是本条目的子笔记时更新，
+        // 否则新建），防止重复拉取导致子笔记无限堆积
+        let child: Zotero.Item | undefined;
+        const prevPullId = getMappedEntry(item.key)?.pullNoteId;
+        if (prevPullId) {
+          try {
+            const prev = await Zotero.Items.getAsync(Number(prevPullId));
+            if (
+              prev &&
+              !prev.deleted &&
+              prev.isNote() &&
+              prev.parentID === item.id
+            ) {
+              child = prev;
+            }
+          } catch (e) {
+            ztoolkit.log("Load previous pull note failed, will recreate", e);
+          }
+        }
+        if (!child) {
+          child = new Zotero.Item("note");
+          child.parentID = item.id;
+        }
+        child.setNote(html);
+        await child.saveTx();
+        recordPullNoteId(item.key, String(child.id));
+
+        // 本地已拿到最新内容，更新改动检测基准，避免下次同步误报
+        try {
+          const info = await client.getNoteInfo(mapped.noteId);
+          if (info.updateTime) {
+            updateNoteModified(item.key, String(info.updateTime));
+          }
+        } catch (e) {
+          ztoolkit.log("updateNoteModified failed (non-fatal)", e);
+        }
+
+        ok++;
+        popup.changeLine({
+          progress: percent,
+          text: `已拉取：${(noteTitle || title).slice(0, 30)}`,
+          type: "success",
+        });
+      } catch (e: any) {
+        failed++;
+        ztoolkit.log("pullFromWps failed", item.key, e?.message || String(e));
+        popup.changeLine({
+          progress: percent,
+          text: `失败：${title.slice(0, 25)}`,
+          type: "fail",
+        });
+      }
+    }
+  } finally {
+    endOperation();
+  }
+
+  popup.startCloseTimer(4000);
+  ztoolkit.log(
+    `pullFromWps done: ok=${ok} skipped=${skipped} failed=${failed}`,
+  );
+}
+
 export async function runSync(force = false) {
   const controller = new AbortControllerImpl();
   let cancelled = false;
@@ -1069,8 +1239,8 @@ export async function runSync(force = false) {
           text: `同步中 ${current}/${total}：${title.slice(0, 30)}`,
         });
       },
-      onConflict: async (_item, title) => {
-        return promptConflict(title);
+      onConflict: async (_item, title, _mapping, kind) => {
+        return promptConflict(title, kind);
       },
     });
 
@@ -1145,6 +1315,16 @@ export function registerMenus(win: Window) {
     menuIcon,
     () => {
       runSync(true);
+    },
+  );
+  appendMenuItem(
+    win,
+    "zotero-itemmenu",
+    "zotero-wpsnote-sync-pull-menuitem",
+    getString("menu-pull-from-wpsnote"),
+    menuIcon,
+    () => {
+      pullFromWps();
     },
   );
   appendMenuItem(

@@ -19,6 +19,7 @@ import type {
 } from "./xmlBuilder";
 import { escapeXml, paragraph, link } from "./xmlHelpers";
 import { markdownToWpsXml, splitMarkdownByTable } from "./markdown";
+import { htmlToWpsXml } from "./htmlToWps";
 
 export { getDefaultTitleTemplate, getDefaultBodyTemplate };
 
@@ -92,30 +93,46 @@ function annotationColorName(color?: string): string {
     const names: Record<string, string> = {
       "#ff6666": "红色",
       "#ff8c19": "橙色",
+      "#f19837": "橙色",
       "#ffd400": "黄色",
+      "#ffff00": "黄色",
       "#5fb236": "绿色",
+      "#74b856": "绿色",
+      "#7fba00": "绿色",
       "#2ea8e5": "蓝色",
       "#a28ae5": "紫色",
       "#e56eee": "粉色",
+      "#ffc0cb": "粉色",
       "#f198b2": "玫红",
+      "#ee8574": "珊瑚色",
+      "#1bb981": "青绿色",
+      "#45cfb9": "青绿色",
       "#aaaaaa": "灰色",
       "#000000": "黑色",
     };
-    return names[(color || "").toLowerCase()] || "未分类";
+    return names[(color || "").toLowerCase()] || "";
   }
   const names: Record<string, string> = {
     "#ff6666": "Red",
     "#ff8c19": "Orange",
+    "#f19837": "Orange",
     "#ffd400": "Yellow",
+    "#ffff00": "Yellow",
     "#5fb236": "Green",
+    "#74b856": "Green",
+    "#7fba00": "Green",
     "#2ea8e5": "Blue",
     "#a28ae5": "Purple",
     "#e56eee": "Pink",
+    "#ffc0cb": "Pink",
     "#f198b2": "Rose",
+    "#ee8574": "Coral",
+    "#1bb981": "Teal",
+    "#45cfb9": "Teal",
     "#aaaaaa": "Gray",
     "#000000": "Black",
   };
-  return names[(color || "").toLowerCase()] || "Uncategorized";
+  return names[(color || "").toLowerCase()] || "";
 }
 
 function groupAnnotationsByPage(
@@ -136,17 +153,25 @@ function groupAnnotationsByPage(
 function groupAnnotationsByColor(
   annotations: ZoteroAnnotation[],
 ): { color: string; colorName: string; items: ZoteroAnnotation[] }[] {
-  const groups = new Map<string, ZoteroAnnotation[]>();
+  // 按颜色名归并：同名色（如多个绿色变体）合成一组，避免重复标题
+  const groups = new Map<
+    string,
+    { color: string; items: ZoteroAnnotation[] }
+  >();
   for (const ann of annotations) {
-    const key = ann.color || "default";
-    const list = groups.get(key) || [];
-    list.push(ann);
-    groups.set(key, list);
+    const colorName = annotationColorName(ann.color);
+    const key = colorName || ann.color || "default";
+    const entry = groups.get(key) || {
+      color: ann.color || "#ffd400",
+      items: [],
+    };
+    entry.items.push(ann);
+    groups.set(key, entry);
   }
-  return Array.from(groups.entries()).map(([color, items]) => ({
-    color,
-    colorName: annotationColorName(color),
-    items,
+  return Array.from(groups.entries()).map(([key, entry]) => ({
+    color: entry.color,
+    colorName: annotationColorName(entry.color),
+    items: entry.items,
   }));
 }
 
@@ -350,6 +375,7 @@ export function renderItemTemplate(
   const enriched = {
     ...item,
     itemKey: item.key,
+    zoteroLink: item.zoteroLink || "",
     authors: item.creators.join("; "),
     yearOrDate: item.year || item.date || "",
     hasDOI: !!item.DOI,
@@ -375,15 +401,7 @@ export function renderItemTemplate(
         .replace(/<\/p>/gi, "\n")
         .replace(/<[^>]+>/g, "")
         .replace(/&nbsp;/g, " "),
-      contentParagraph: paragraph(
-        n.content
-          .replace(/<img\b[^>]*>/gi, "[图片]")
-          .replace(/<br\s*\/?>/gi, "\n")
-          .replace(/<\/p>/gi, "\n")
-          .replace(/<[^>]+>/g, "")
-          .replace(/&nbsp;/g, " ")
-          .trim(),
-      ),
+      contentParagraph: htmlToWpsXml(n.content),
       hasImages: Array.isArray(n.images) && n.images.length > 0,
       imageCount: Array.isArray(n.images) ? n.images.length : 0,
     })),
@@ -421,19 +439,25 @@ export function renderItemTemplate(
 const DEFAULT_TITLE_TEMPLATE = "[Zotero] {{title}}";
 
 const DEFAULT_BODY_TEMPLATE_EN = `<h1>{{title}}</h1>
-<highlightBlock emoji="💡" highlightBlockBackgroundColor="#FAF1E6" highlightBlockBorderColor="#FEC794">
-{{#if authors}}<p><strong>Author(s):</strong> {{authors}}</p>{{/if}}
-{{#if publicationTitle}}<p><strong>Source:</strong> {{publicationTitle}}</p>{{/if}}
-{{#if yearOrDate}}<p><strong>Year:</strong> {{yearOrDate}}</p>{{/if}}
-{{#if itemType}}<p><strong>Type:</strong> {{itemType}}</p>{{/if}}
-{{#if hasDOI}}<p><strong>DOI:</strong> {{{doiLink}}}</p>{{/if}}
-{{#if hasURL}}<p><strong>URL:</strong> {{{urlLink}}}</p>{{/if}}
-{{#if citeKey}}<p><strong>BibTeX key:</strong> {{citeKey}}</p>{{/if}}
-<p><strong>Zotero key:</strong> {{itemKey}}</p>
-</highlightBlock>
+<columns>
+<column columnBackgroundColor="#FAF1E6">
+{{#if authors}}<p><strong>Author(s)</strong> {{authors}}</p>{{/if}}
+{{#if publicationTitle}}<p><strong>Source</strong> {{publicationTitle}}</p>{{/if}}
+{{#if yearOrDate}}<p><strong>Year</strong> {{yearOrDate}}</p>{{/if}}
+{{#if itemType}}<p><strong>Type</strong> {{itemType}}</p>{{/if}}
+</column>
+<column columnBackgroundColor="#EBF2FF">
+{{#if hasDOI}}<p><strong>DOI</strong> {{{doiLink}}}</p>{{/if}}
+{{#if hasURL}}<p><strong>URL</strong> {{{urlLink}}}</p>{{/if}}
+{{#if citeKey}}<p><strong>BibTeX</strong> {{citeKey}}</p>{{/if}}
+<p><strong>Zotero</strong> {{itemKey}}</p>
+</column>
+</columns>
 {{#if hasAbstract}}
 <h2>Abstract</h2>
+<highlightBlock emoji="📄" highlightBlockBackgroundColor="#F6F9FC" highlightBlockBorderColor="#D6E4F0">
 {{{abstractParagraph}}}
+</highlightBlock>
 {{/if}}
 {{#if hasAttachments}}
 <h2>Attachments</h2>
@@ -444,9 +468,9 @@ const DEFAULT_BODY_TEMPLATE_EN = `<h1>{{title}}</h1>
 {{#if hasAnnotations}}
 <h2>Annotations</h2>
 {{#each annotationGroupsByColor}}
-<h3>{{colorName}}</h3>
+{{#if colorName}}<h3>{{colorName}}</h3>{{/if}}
 {{#each items}}
-<highlightBlock emoji="📝" highlightBlockBackgroundColor="#F3F6F8" highlightBlockBorderColor="#D1D9E0">
+<highlightBlock emoji="📝" highlightBlockBackgroundColor="{{color}}26" highlightBlockBorderColor="{{color}}">
 <p><strong>[{{typeLabel}}]</strong></p>
 {{{textParagraph}}}
 {{#if comment}}<p><strong>Comment</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
@@ -466,23 +490,29 @@ const DEFAULT_BODY_TEMPLATE_EN = `<h1>{{title}}</h1>
 {{/if}}
 {{#if hasTags}}
 <h2>Tags</h2>
-<p>{{tagsJoined}}</p>
+<p><span fontHighlightColor="#FBF5B3" fontColor="#5B4B00">{{tagsJoined}}</span></p>
 {{/if}}`;
 
 const DEFAULT_BODY_TEMPLATE_ZH = `<h1>{{title}}</h1>
-<highlightBlock emoji="💡" highlightBlockBackgroundColor="#FAF1E6" highlightBlockBorderColor="#FEC794">
-{{#if authors}}<p><strong>作者：</strong>{{authors}}</p>{{/if}}
-{{#if publicationTitle}}<p><strong>来源：</strong>{{publicationTitle}}</p>{{/if}}
-{{#if yearOrDate}}<p><strong>年份：</strong>{{yearOrDate}}</p>{{/if}}
-{{#if itemType}}<p><strong>类型：</strong>{{itemType}}</p>{{/if}}
-{{#if hasDOI}}<p><strong>DOI：</strong>{{{doiLink}}}</p>{{/if}}
-{{#if hasURL}}<p><strong>URL：</strong>{{{urlLink}}}</p>{{/if}}
-{{#if citeKey}}<p><strong>BibTeX key：</strong>{{citeKey}}</p>{{/if}}
-<p><strong>Zotero key：</strong>{{itemKey}}</p>
-</highlightBlock>
+<columns>
+<column columnBackgroundColor="#FAF1E6">
+{{#if authors}}<p><strong>作者</strong> {{authors}}</p>{{/if}}
+{{#if publicationTitle}}<p><strong>来源</strong> {{publicationTitle}}</p>{{/if}}
+{{#if yearOrDate}}<p><strong>年份</strong> {{yearOrDate}}</p>{{/if}}
+{{#if itemType}}<p><strong>类型</strong> {{itemType}}</p>{{/if}}
+</column>
+<column columnBackgroundColor="#EBF2FF">
+{{#if hasDOI}}<p><strong>DOI</strong> {{{doiLink}}}</p>{{/if}}
+{{#if hasURL}}<p><strong>链接</strong> {{{urlLink}}}</p>{{/if}}
+{{#if citeKey}}<p><strong>BibTeX</strong> {{citeKey}}</p>{{/if}}
+<p><strong>Zotero</strong> {{itemKey}}</p>
+</column>
+</columns>
 {{#if hasAbstract}}
 <h2>摘要</h2>
+<highlightBlock emoji="📄" highlightBlockBackgroundColor="#F6F9FC" highlightBlockBorderColor="#D6E4F0">
 {{{abstractParagraph}}}
+</highlightBlock>
 {{/if}}
 {{#if hasAttachments}}
 <h2>附件</h2>
@@ -493,9 +523,9 @@ const DEFAULT_BODY_TEMPLATE_ZH = `<h1>{{title}}</h1>
 {{#if hasAnnotations}}
 <h2>文献批注</h2>
 {{#each annotationGroupsByColor}}
-<h3>{{colorName}}</h3>
+{{#if colorName}}<h3>{{colorName}}</h3>{{/if}}
 {{#each items}}
-<highlightBlock emoji="📝" highlightBlockBackgroundColor="#F3F6F8" highlightBlockBorderColor="#D1D9E0">
+<highlightBlock emoji="📝" highlightBlockBackgroundColor="{{color}}26" highlightBlockBorderColor="{{color}}">
 <p><strong>[{{typeLabel}}]</strong></p>
 {{{textParagraph}}}
 {{#if comment}}<p><strong>批注</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
@@ -515,7 +545,7 @@ const DEFAULT_BODY_TEMPLATE_ZH = `<h1>{{title}}</h1>
 {{/if}}
 {{#if hasTags}}
 <h2>标签</h2>
-<p>{{tagsJoined}}</p>
+<p><span fontHighlightColor="#FBF5B3" fontColor="#5B4B00">{{tagsJoined}}</span></p>
 {{/if}}`;
 
 function isChineseLocale(): boolean {
@@ -535,3 +565,99 @@ function getDefaultBodyTemplate(): string {
     ? DEFAULT_BODY_TEMPLATE_ZH
     : DEFAULT_BODY_TEMPLATE_EN;
 }
+
+export interface TemplatePreset {
+  id: string;
+  name: string;
+  titleTemplate: string;
+  bodyTemplate: string;
+}
+
+/** 模板预设：点击填充到设置页模板框，可继续手改 */
+export const TEMPLATE_PRESETS: TemplatePreset[] = [
+  {
+    id: "minimal",
+    name: "极简卡片",
+    titleTemplate: "{{title}}",
+    bodyTemplate: `<h1>{{title}}</h1>
+<p>{{authors}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}</p>
+{{#if publicationTitle}}<p>{{publicationTitle}}</p>{{/if}}
+{{#if hasDOI}}<p>DOI: {{{doiLink}}}</p>{{/if}}
+{{#if hasURL}}<p>{{{urlLink}}}</p>{{/if}}
+{{#if hasAbstract}}
+<h2>摘要</h2>
+{{{abstractParagraph}}}
+{{/if}}`,
+  },
+  {
+    id: "full",
+    name: "富文本全量（默认）",
+    titleTemplate: DEFAULT_TITLE_TEMPLATE,
+    bodyTemplate: isChineseLocale()
+      ? DEFAULT_BODY_TEMPLATE_ZH
+      : DEFAULT_BODY_TEMPLATE_EN,
+  },
+  {
+    id: "annotation",
+    name: "批注研读版",
+    titleTemplate: "[批注] {{title}}",
+    bodyTemplate: `<h1>{{title}}</h1>
+<p>{{authors}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}{{#if publicationTitle}} · {{publicationTitle}}{{/if}}</p>
+{{#if hasAbstract}}
+<h2>摘要</h2>
+{{{abstractParagraph}}}
+{{/if}}
+{{#if hasAnnotations}}
+<h2>文献批注（按颜色分组）</h2>
+{{#each annotationGroupsByColor}}
+{{#if colorName}}<h3>{{colorName}}</h3>{{/if}}
+{{#each items}}
+<highlightBlock emoji="📝" highlightBlockBackgroundColor="{{color}}26" highlightBlockBorderColor="{{color}}">
+<p><strong>[{{typeLabel}}]</strong></p>
+{{{textParagraph}}}
+{{#if comment}}<p><strong>我的批注</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
+</highlightBlock>
+{{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
+{{/each}}
+{{/each}}
+{{/if}}
+{{#if hasNotes}}
+<h2>文献笔记</h2>
+{{#each notes}}
+{{#if title}}<h3>{{title}}</h3>{{/if}}
+{{{contentParagraph}}}
+{{/each}}
+{{/if}}`,
+  },
+  {
+    id: "notes",
+    name: "读书笔记版",
+    titleTemplate: "[笔记] {{title}}",
+    bodyTemplate: `<h1>{{title}}</h1>
+<p>{{authors}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}</p>
+{{#if hasNotes}}
+<h2>我的笔记</h2>
+{{#each notes}}
+{{#if title}}<h3>{{title}}</h3>{{/if}}
+{{{contentParagraph}}}
+{{/each}}
+{{/if}}
+{{#if hasAbstract}}
+<h2>摘要备查</h2>
+{{{abstractParagraph}}}
+{{/if}}
+{{#if hasAnnotations}}
+<h2>划线摘录</h2>
+{{#each annotationGroupsByColor}}
+{{#each items}}
+{{{textParagraph}}}
+{{#if comment}}<p><strong>批注：</strong>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}</p>{{/if}}
+{{/each}}
+{{/each}}
+{{/if}}
+{{#if hasTags}}
+<h2>标签</h2>
+<p>{{tagsJoined}}</p>
+{{/if}}`,
+  },
+];

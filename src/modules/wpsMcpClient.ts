@@ -269,7 +269,7 @@ export class WpsMcpClient {
           method,
           err?.message || String(err),
         );
-        await new Promise((resolve) => Zotero.setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
@@ -619,6 +619,77 @@ export class WpsMcpClient {
     throw new Error(
       "MCP server 未提供标签管理工具（manage_note_tags/add_note_tags）",
     );
+  }
+
+  /** 读取笔记元信息（标题、WPS 端 update_time），用于改动检测 */
+  async getNoteInfo(
+    noteId: string,
+  ): Promise<{ title: string; updateTime: number }> {
+    const res = await this.callTool("get_note_info", { noteId });
+    const notes = (res as { notes?: Array<Record<string, any>> }).notes;
+    const note = Array.isArray(notes)
+      ? notes.find((n) => String(n.note_id) === String(noteId)) || notes[0]
+      : undefined;
+    if (!note) {
+      throw new Error(
+        `get_note_info 未返回该笔记：${JSON.stringify(res).slice(0, 200)}`,
+      );
+    }
+    return {
+      title: String(note.title || ""),
+      updateTime: Number(note.update_time || 0),
+    };
+  }
+
+  /** 读回笔记内容（语义 XML），支持分页；用于 WPS → Zotero 回流 */
+  async readNote(
+    noteId: string,
+    offset = 0,
+    limit = 50,
+  ): Promise<{
+    title: string;
+    content: string;
+    truncated: boolean;
+    hasMore: boolean;
+  }> {
+    const res = await this.callTool("read_note", { noteId, offset, limit });
+    const data = res as {
+      title?: string;
+      content?: string;
+      truncated?: boolean;
+      pagination?: { has_more?: boolean };
+    };
+    if (typeof data.content !== "string" || !data.content) {
+      throw new Error(
+        `read_note 未返回内容：${JSON.stringify(res).slice(0, 200)}`,
+      );
+    }
+    return {
+      title: String(data.title || ""),
+      content: data.content,
+      truncated: Boolean(data.truncated),
+      hasMore: Boolean(data.pagination?.has_more),
+    };
+  }
+
+  /**
+   * 列出正常状态的笔记（不含回收站）。用于校验映射笔记是否仍可见。
+   */
+  async listNotes(
+    limit = 1000,
+  ): Promise<
+    Array<{ note_id?: string; title?: string; delete_time?: number }>
+  > {
+    const res = await this.callTool("list_notes", { limit });
+    const resObj = res as { notes?: unknown[]; items?: unknown[] };
+    const list = resObj.notes || resObj.items || [];
+    return Array.isArray(list)
+      ? (list as Array<{
+          note_id?: string;
+          title?: string;
+          delete_time?: number;
+        }>)
+      : [];
   }
 
   async searchNotes(keyword: string, limit = 10): Promise<unknown[]> {

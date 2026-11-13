@@ -18,6 +18,8 @@ export interface SyncMappingEntry {
   lastError?: string;
   lastErrorType?: string;
   lastErrorCode?: number | string;
+  /** 上次回流拉取写入的 Zotero 子笔记 id（重复拉取时更新该子笔记而非新建） */
+  pullNoteId?: string;
 }
 
 export interface SyncMapping {
@@ -116,6 +118,26 @@ export function recordSyncResult(
 export function removeMappedNote(itemKey: string): void {
   const mapping = loadMapping();
   delete mapping[itemKey];
+  saveMapping(mapping);
+}
+
+/** 只更新 WPS 端修改时间基准，不动同步状态（回流拉取后调用） */
+export function updateNoteModified(itemKey: string, noteModified: string) {
+  const mapping = loadMapping();
+  const entry = mapping[itemKey];
+  if (!entry?.noteId) return;
+  entry.noteModified = noteModified;
+  mapping[itemKey] = entry;
+  saveMapping(mapping);
+}
+
+/** 记录回流写入的子笔记 id，重复拉取时复用（防止子笔记无限堆积） */
+export function recordPullNoteId(itemKey: string, pullNoteId: string): void {
+  const mapping = loadMapping();
+  const entry = mapping[itemKey];
+  if (!entry?.noteId) return;
+  entry.pullNoteId = pullNoteId;
+  mapping[itemKey] = entry;
   saveMapping(mapping);
 }
 

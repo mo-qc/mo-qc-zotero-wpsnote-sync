@@ -31,4 +31,12 @@ pref-titlePreview = 标题预览
 pref-bodyTemplate = 笔记正文模板（留空使用默认）
 pref-bodyPreview = 正文预览（实时）
 pref-bodyTemplate-help = 语法：双大括号变量会转义输出，三重大括号原样输出 XML；可用 if/else、each 控制结构。常用变量：title、authors、yearOrDate、publicationTitle、itemType、DOI、url、citeKey、itemKey、abstractParagraph、doiLink、urlLink、hasAnnotations、annotationGroupsByColor、hasNotes、contentParagraph、hasTags。
+pref-changePollEnabled = 启用 WPS 改动轮询提醒
+pref-changePollInterval = 轮询间隔（分钟）
+pref-changePoll-help = 定期检查已同步笔记在 WPS 端是否被修改，发现改动时弹窗提醒，由你决定是否拉取回 Zotero；不会自动覆盖任何一边
 pref-help = { $name } Build { $version } { $time }
+
+# MCP Server（对外接口）
+pref-mcpServerWriteEnabled = 允许外部 MCP 客户端写操作（同步 / 回流）
+pref-mcpServerToken = 访问令牌（可选）
+pref-mcpServer-help = 插件在本机 127.0.0.1:23119 提供 MCP 端点 /wpsnote/mcp，供 Claude、llm-for-zotero 等外部 AI 客户端读取同步状态或触发同步。写操作默认关闭；填写访问令牌后，客户端需在请求头携带 Authorization: Bearer <令牌> 或 X-API-Key。

@@ -28,6 +28,9 @@ import { runWithConcurrency } from "../utils/concurrencyHelper";
 
 export type ConflictResolution = "overwrite" | "skip" | "create-copy";
 
+/** 冲突来源：item = Zotero 侧文献变更；wps = WPS 端笔记被手工修改 */
+export type ConflictKind = "item" | "wps";
+
 export interface SyncOptions {
   interfaceType?: McpInterfaceType;
   endpoint?: string;
@@ -45,6 +48,7 @@ export interface SyncOptions {
     item: Zotero.Item,
     title: string,
     mapping: SyncMappingEntry,
+    kind?: ConflictKind,
   ) => Promise<ConflictResolution>;
   signal?: AbortSignal;
 }
@@ -74,6 +78,7 @@ export interface SyncResult {
   title: string;
   noteId?: string;
   noteUrl?: string;
+  noteModified?: string;
   error?: string;
   errorType?: SyncErrorType;
   errorCode?: number | string;
@@ -171,7 +176,25 @@ async function syncNoteImages(
   }
 }
 
-function getClient(options?: SyncOptions): WpsMcpClient {
+// 操作互斥锁：同步 / 回流 / 轮询检测共用一个槽位，
+// 防止并发写同一篇笔记或轮询读到同步中途的基准造成误报。
+let operationLock: string | null = null;
+
+export function beginOperation(kind: string): boolean {
+  if (operationLock) return false;
+  operationLock = kind;
+  return true;
+}
+
+export function endOperation(): void {
+  operationLock = null;
+}
+
+export function currentOperation(): string | null {
+  return operationLock;
+}
+
+export function getClient(options?: SyncOptions): WpsMcpClient {
   const config = getMcpConfig();
 
   const interfaceType = options?.interfaceType || config.interfaceType;
@@ -186,7 +209,7 @@ function getClient(options?: SyncOptions): WpsMcpClient {
   return new WpsMcpClient({ interfaceType, endpoint, apiKey });
 }
 
-function isMappingInvalidError(err: any): boolean {
+export function isMappingInvalidError(err: any): boolean {
   const msg = String(err?.message || "").toLowerCase();
   const patterns = [
     "note not found",
@@ -206,7 +229,7 @@ function checkCancelled(signal?: AbortSignal): void {
   }
 }
 
-function classifyError(err: any): SyncErrorType {
+export function classifyError(err: any): SyncErrorType {
   const code = (err as any)?.code;
   const msg = String(err?.message || "").toLowerCase();
 
@@ -327,6 +350,54 @@ export async function syncItem(
       ? { noteId: mappedEntry.noteId!, noteUrl: mappedEntry.noteUrl || "" }
       : undefined;
 
+    // 映射未命中时从条目 extra 字段恢复 noteId（冗余备份）。
+    // 只恢复 mapped 不恢复 mappedEntry：无基准则增量/冲突/改动检测全部
+    // 走完整同步，同步成功后由 recordSyncResult 重建基准。
+    if (!mapped && updateExisting) {
+      const extraNoteId = readNoteIdFromExtra(item);
+      if (extraNoteId) {
+        ztoolkit.log("Restore noteId from item extra", item.key, extraNoteId);
+        mapped = { noteId: extraNoteId, noteUrl: "" };
+      }
+    }
+
+    // 校验映射笔记在 WPS 端仍可见（排除回收站）：笔记被删除后
+    // get_note_outline 仍可读到回收站内容，但 search_notes/list_notes
+    // 不返回回收站——判定已删则清映射与 extra 冗余，走新建。
+    // 可见集合走 30s 缓存，批量同步期间只拉一次列表。
+    if (mapped && updateExisting) {
+      const mappedNoteId = mapped.noteId;
+      let visible = false;
+      try {
+        const visibleIds = await getVisibleNoteIds(client);
+        visible = visibleIds.has(mappedNoteId);
+        if (!visible) {
+          // 列表可能分页不全，用标题搜索按 note_id 复核后再判定
+          const candidates = await client.searchNotes(data.title, 10);
+          visible = candidates.some(
+            (n) =>
+              String((n as { note_id?: string }).note_id || "") ===
+              mappedNoteId,
+          );
+        }
+      } catch (e) {
+        // 校验失败保守沿用映射，避免误建重复笔记
+        ztoolkit.log("Mapping visibility check failed (non-fatal)", e);
+        visible = true;
+      }
+      if (!visible) {
+        ztoolkit.log(
+          "Mapped note trashed in WPS, clearing mapping",
+          item.key,
+          mappedNoteId,
+        );
+        removeMappedNote(item.key);
+        await clearNoteIdFromExtra(item);
+        mapped = undefined;
+        mappedEntry = undefined;
+      }
+    }
+
     // 增量同步：文献未变更且上次同步成功，则直接跳过
     const incrementalSync =
       options?.incrementalSync ?? Boolean(getPref("incrementalSync"));
@@ -347,6 +418,8 @@ export async function syncItem(
         noteUrl: mappedEntry.noteUrl,
         itemModified,
       });
+      // 补写 extra 冗余（老条目可能缺失）
+      await writeNoteIdToExtra(item, mappedEntry.noteId!);
       return result;
     }
 
@@ -363,6 +436,7 @@ export async function syncItem(
           item,
           data.title,
           mappedEntry,
+          "item",
         );
         if (resolution === "skip") {
           result.success = true;
@@ -386,14 +460,67 @@ export async function syncItem(
       }
     }
 
+    // WPS 端改动检测：上次同步后 WPS 笔记被手工修改（update_time 晚于记录的基准）
+    if (mapped && mappedEntry?.lastSuccess && mappedEntry.noteModified) {
+      try {
+        const info = await client.getNoteInfo(mapped.noteId);
+        const wpsModified = String(info.updateTime || "");
+        if (
+          wpsModified &&
+          Number(wpsModified) > Number(mappedEntry.noteModified)
+        ) {
+          ztoolkit.log(
+            "WPS-side modification detected",
+            item.key,
+            mappedEntry.noteModified,
+            "->",
+            wpsModified,
+          );
+          if (promptOnConflict && options?.onConflict) {
+            const resolution = await options.onConflict(
+              item,
+              data.title,
+              mappedEntry,
+              "wps",
+            );
+            if (resolution === "skip") {
+              result.success = true;
+              result.noteId = mappedEntry.noteId;
+              result.noteUrl = mappedEntry.noteUrl;
+              recordSyncResult(item.key, {
+                success: true,
+                title: data.title,
+                noteId: mappedEntry.noteId,
+                noteUrl: mappedEntry.noteUrl,
+                itemModified,
+                noteModified: mappedEntry.noteModified,
+              });
+              return result;
+            }
+            if (resolution === "create-copy") {
+              noteId = undefined;
+              noteUrl = undefined;
+              mapped = undefined;
+              mappedEntry = undefined;
+            }
+          }
+          // overwrite（或未开启冲突提示）→ 覆盖 WPS 端继续
+        }
+      } catch (e) {
+        // 检测失败不阻断同步
+        ztoolkit.log("WPS-side modification check failed (non-fatal)", e);
+      }
+    }
+
     if (mapped) {
       noteId = mapped.noteId;
       noteUrl = mapped.noteUrl;
     }
 
-    // 2. 映射未命中时，按标题关键词搜索
+    // 2. 映射未命中时，按标题关键词搜索（用文献标题本身做锚点，
+    //    与标题模板前缀无关，避免用户改模板后兜底失效重复建笔记）
     if (!noteId && updateExisting) {
-      const existing = await client.searchNotes(`[Zotero] ${data.title}`, 5);
+      const existing = await client.searchNotes(data.title, 5);
       const match = existing.find(
         (n) =>
           String((n as { title?: string }).title || "").includes(data.title) ||
@@ -458,7 +585,12 @@ export async function syncItem(
       .map(sanitizeWpsTag)
       .filter(Boolean);
     if (tagsToAdd.length) {
-      await client.addNoteTags(noteId, tagsToAdd);
+      // 标签失败不阻断：正文已写入，降级为警告，保证映射正常保存
+      try {
+        await client.addNoteTags(noteId, tagsToAdd);
+      } catch (e) {
+        ztoolkit.log("Add note tags failed (non-fatal)", e);
+      }
     }
 
     // 保存/更新映射
@@ -467,6 +599,19 @@ export async function syncItem(
     result.success = true;
     result.noteId = noteId;
     result.noteUrl = finalUrl;
+
+    // 记录写入后的 WPS 端 update_time 作为下次改动检测基准（失败不阻断）
+    try {
+      const info = await client.getNoteInfo(noteId);
+      if (info.updateTime) {
+        result.noteModified = String(info.updateTime);
+      }
+    } catch (e) {
+      ztoolkit.log("Record noteModified failed (non-fatal)", e);
+    }
+
+    // 冗余写入 noteId 到条目 extra（幂等，失败不阻断）
+    await writeNoteIdToExtra(item, noteId);
   } catch (err: any) {
     result.error = err?.message || String(err);
     result.errorType = classifyError(err);
@@ -486,6 +631,7 @@ export async function syncItem(
     noteId: result.noteId,
     noteUrl: result.noteUrl,
     itemModified,
+    noteModified: result.noteModified,
     error: result.error,
     errorType: result.errorType,
     errorCode: result.errorCode,
@@ -494,9 +640,97 @@ export async function syncItem(
   return result;
 }
 
+const EXTRA_NOTE_ID_KEY = "ZWS-Note-Id";
+
+/** 从条目 extra 字段读取冗余备份的 WPS noteId */
+export function readNoteIdFromExtra(item: Zotero.Item): string | undefined {
+  const extra = (item.getField("extra") as string) || "";
+  for (const line of extra.split(/\r?\n/)) {
+    const m = line.match(/^\s*ZWS-Note-Id\s*:\s*(\S+)\s*$/i);
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
+/**
+ * 把 noteId 冗余写入条目 extra 字段（映射丢失时可从条目自身恢复）。
+ * 幂等：值未变化不保存，避免触发条目修改→自动同步循环；失败不阻断。
+ */
+export async function writeNoteIdToExtra(
+  item: Zotero.Item,
+  noteId: string,
+): Promise<void> {
+  try {
+    const base = ((item.getField("extra") as string) || "").replace(/\s+$/, "");
+    const lines = base
+      ? base.split(/\r?\n/).filter((l) => !/^\s*ZWS-Note-Id\s*:/i.test(l))
+      : [];
+    const next = [...lines, `${EXTRA_NOTE_ID_KEY}: ${noteId}`].join("\n");
+    if (next === base) return;
+    item.setField("extra", next);
+    await item.saveTx();
+    ztoolkit.log("Wrote noteId to item extra", item.key, noteId);
+  } catch (e) {
+    ztoolkit.log("Write noteId to extra failed (non-fatal)", e);
+  }
+}
+
+// 正常笔记可见集合缓存（回收站校验用）：批量同步期间共享，
+// 避免每篇同步都拉一次 list_notes。
+let visibleNotesCache: { ids: Set<string>; ts: number } | null = null;
+const VISIBLE_CACHE_TTL = 30_000;
+
+export async function getVisibleNoteIds(
+  client: ReturnType<typeof getClient>,
+): Promise<Set<string>> {
+  if (
+    visibleNotesCache &&
+    Date.now() - visibleNotesCache.ts < VISIBLE_CACHE_TTL
+  ) {
+    return visibleNotesCache.ids;
+  }
+  const all = await client.listNotes(1000);
+  const ids = new Set(all.map((n) => String(n.note_id || "")).filter(Boolean));
+  visibleNotesCache = { ids, ts: Date.now() };
+  return ids;
+}
+
+/**
+ * 清除条目 extra 中的 noteId 冗余行（映射笔记在 WPS 端被删除时调用，
+ * 避免下次同步从 extra 恢复到已进回收站的 noteId）。失败不阻断。
+ */
+export async function clearNoteIdFromExtra(item: Zotero.Item): Promise<void> {
+  try {
+    const base = ((item.getField("extra") as string) || "").replace(/\s+$/, "");
+    const lines = base
+      ? base.split(/\r?\n/).filter((l) => !/^\s*ZWS-Note-Id\s*:/i.test(l))
+      : [];
+    const next = lines.join("\n");
+    if (next === base) return;
+    item.setField("extra", next);
+    await item.saveTx();
+    ztoolkit.log("Cleared noteId from item extra", item.key);
+  } catch (e) {
+    ztoolkit.log("Clear noteId from extra failed (non-fatal)", e);
+  }
+}
+
 const DEFAULT_SYNC_CONCURRENCY = 2;
 
 export async function syncSelectedItems(
+  options?: SyncOptions,
+): Promise<SyncResult[]> {
+  if (!beginOperation("sync")) {
+    throw new Error("另一同步/回流操作正在进行，请稍后再试。");
+  }
+  try {
+    return await syncSelectedItemsLocked(options);
+  } finally {
+    endOperation();
+  }
+}
+
+async function syncSelectedItemsLocked(
   options?: SyncOptions,
 ): Promise<SyncResult[]> {
   let items = getSelectedItems().filter(

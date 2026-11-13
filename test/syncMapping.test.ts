@@ -4,6 +4,8 @@ import type {
   getMappedEntry as GetMappedEntry,
   getAllMappings as GetAllMappings,
   removeMappedNote as RemoveMappedNote,
+  recordPullNoteId as RecordPullNoteId,
+  updateNoteModified as UpdateNoteModified,
 } from "../src/modules/syncMapping";
 
 const storage: Record<string, any> = {};
@@ -27,6 +29,8 @@ describe("syncMapping", function () {
   let getMappedEntry: typeof GetMappedEntry;
   let getAllMappings: typeof GetAllMappings;
   let removeMappedNote: typeof RemoveMappedNote;
+  let recordPullNoteId: typeof RecordPullNoteId;
+  let updateNoteModified: typeof UpdateNoteModified;
 
   before(async function () {
     const mod = await import("../src/modules/syncMapping");
@@ -34,6 +38,8 @@ describe("syncMapping", function () {
     getMappedEntry = mod.getMappedEntry;
     getAllMappings = mod.getAllMappings;
     removeMappedNote = mod.removeMappedNote;
+    recordPullNoteId = mod.recordPullNoteId;
+    updateNoteModified = mod.updateNoteModified;
   });
 
   beforeEach(function () {
@@ -104,5 +110,31 @@ describe("syncMapping", function () {
     expect(Object.keys(all)).to.have.lengthOf(2);
     expect(all.ITEM1.noteId).to.equal("NOTE1");
     expect(all.ITEM2.noteId).to.equal("NOTE2");
+  });
+
+  it("records pull note id for re-pull reuse", function () {
+    recordSyncResult("ITEM1", { success: true, noteId: "NOTE1" });
+    recordPullNoteId("ITEM1", "777");
+    expect(getMappedEntry("ITEM1")?.pullNoteId).to.equal("777");
+    // 覆盖更新：重复拉取只保留最新子笔记 id
+    recordPullNoteId("ITEM1", "888");
+    expect(getMappedEntry("ITEM1")?.pullNoteId).to.equal("888");
+    // 其他字段不受影响
+    expect(getMappedEntry("ITEM1")?.noteId).to.equal("NOTE1");
+  });
+
+  it("ignores pull note id when mapping missing", function () {
+    recordPullNoteId("NOPE", "777");
+    expect(getMappedEntry("NOPE")).to.be.undefined;
+  });
+
+  it("updates note modified baseline without touching sync state", function () {
+    recordSyncResult("ITEM1", { success: true, noteId: "NOTE1" });
+    const before = getMappedEntry("ITEM1")?.lastSync;
+    updateNoteModified("ITEM1", "1794550000000");
+    const entry = getMappedEntry("ITEM1");
+    expect(entry?.noteModified).to.equal("1794550000000");
+    expect(entry?.lastSync).to.equal(before);
+    expect(entry?.lastSuccess).to.equal(true);
   });
 });

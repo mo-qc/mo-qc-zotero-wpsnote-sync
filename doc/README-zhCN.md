@@ -1,8 +1,8 @@
 # Zotero → WPS 笔记同步
 
-[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![zotero target version](https://img.shields.io/badge/Zotero-7%2B-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 
-一个 Zotero 7 插件，通过 WPS MCP（Model Context Protocol）接口将文献条目、子笔记、PDF 链接和批注同步到 **WPS 笔记**。
+一个 Zotero 7+ 插件（已在 Zotero 10 上验证），通过 WPS MCP（Model Context Protocol）接口将文献条目、子笔记、PDF 链接和批注同步到 **WPS 笔记**，并支持受控双向回流。
 
 [English](../README.md) | [简体中文](./README-zhCN.md)
 
@@ -18,11 +18,21 @@
 - **同步历史**：查看最近同步状态、WPS 笔记 ID 和错误信息。
 - **可取消进度**：关闭同步进度窗口即可取消当前同步。
 - **文件夹同步**：支持一次性同步整个分类/文件夹。
-- **模板自定义**：使用类 Mustache 模板引擎自定义笔记标题与正文。
+- **模板自定义**：使用类 Mustache 模板引擎自定义笔记标题与正文，内置预设模板，并可用当前选中文献做实时渲染预览。
+- **受控双向同步**：后台轮询比对 WPS 端 `update_time`，发现改动先提醒再拉取；手动「从 WPS 拉取」把笔记写回 Zotero 子笔记，重复拉取复用同一篇（不堆重复）。
+- **回收站感知**：同步的笔记在 WPS 端被删除（进回收站）后，自动清理映射与条目 extra 中的 `ZWS-Note-Id` 冗余，下次同步重建新笔记。
+- **映射自愈**：WPS 笔记 ID 冗余写入条目 extra 字段，映射存储丢失后可自动恢复。
+- **MCP 配置验证**：粘贴 MCP JSON 后可一键「验证配置」（格式结构 + 真实连接测试），防复制粘贴错误。
+- **语义富文本输出**：内容按 WPS 原生块渲染（高亮块、分栏、表格、引用、代码块），而非拍平纯文本。
+- **自动同步触发**：按标签自动同步；元数据/批注/子笔记修改后数秒内自动重新同步（AI 工具写入的子笔记改动也能触发）。
+- **并发控制**：批量同步支持可配置并发数，避免触发 WPS 限流。
+- **MCP Server 对外端点**：插件在本机 `http://127.0.0.1:23119/wpsnote/mcp`（Streamable HTTP）提供 MCP 端点，供 Claude、llm-for-zotero 等外部 AI 客户端读取同步状态、检出 WPS 改动，并在设置中显式开启后触发同步/回流。写工具默认关闭，可选配访问令牌。
+- **AI 对话式同步**：向 llm-for-zotero 注册 `wps_sync_status`、`wps_poll_changes`、`wps_sync_item`、`wps_pull_note` 四个 agent 工具，可在对话中让 AI 代为同步或回流（写操作需聊天内确认卡）。
+- **Better Notes 笔记链接转换**：子笔记中的 Better Notes `zotero://note/u/<KEY>/` 链接自动改写为目标笔记的 WPS 可点击链接；未同步或死链降级为纯文本。
 
 ## 环境要求
 
-- Zotero 7
+- Zotero 7+（开发与验证环境为 Zotero 10）
 - Node.js LTS
 - WPS 笔记 MCP API Key（云端或本地 streamable_http 端点）
 
@@ -81,6 +91,11 @@ npm run test:unit
 | 冲突时提示       | 条目变更时询问处理方式                                   |
 | 同步内容开关     | 摘要、附件、PDF 批注、标签、子笔记                       |
 | 自动同步标签     | 添加该标签后自动同步                                     |
+| 修改时自动同步   | 元数据/批注变更后数秒内自动重新同步                      |
+| 同步并发数       | 批量同步并行数（建议 1–5）                               |
+| WPS 改动轮询     | 定期检查已同步笔记的 WPS 端改动并提醒                    |
+| MCP Server 写操作 | 允许外部 MCP 客户端调用同步/回流工具（默认关闭）         |
+| MCP Server 令牌  | 可选：要求 MCP 客户端携带的访问令牌                      |
 | 标题/正文模板    | 使用模板语法自定义输出格式                               |
 
 ### 模板语法
