@@ -253,7 +253,22 @@ function bindPrefEvents() {
   doc
     .getElementById(`zotero-prefpane-${config.addonRef}-changePollEnabled`)
     ?.addEventListener("change", () => restartChangePoller());
+  // 打字即防抖保存：change 要等失焦才触发，期间切换接口/重开设置页会用
+  // pref 旧值覆盖未保存的输入（用户看到"输入的 key 变成了别的"）
+  let authSaveTimer: ReturnType<typeof setTimeout> | undefined;
+  mcpAuthInput?.addEventListener("input", () => {
+    if (authSaveTimer) clearTimeout(authSaveTimer);
+    authSaveTimer = setTimeout(() => {
+      const value = mcpAuthInput.value.trim();
+      if (currentInterface() === "local") {
+        setLocalMcpToken(value);
+      } else {
+        setApiKey(value);
+      }
+    }, 300);
+  });
   mcpAuthInput?.addEventListener("change", () => {
+    if (authSaveTimer) clearTimeout(authSaveTimer);
     const value = mcpAuthInput.value.trim();
     if (currentInterface() === "local") {
       setLocalMcpToken(value);
@@ -282,6 +297,15 @@ function bindPrefEvents() {
   if (mcpTestBtn && mcpTestResult) {
     const btnLabel = mcpTestBtn.textContent || "验证配置";
     mcpTestBtn.addEventListener("click", async () => {
+      // 先落盘输入框当前值：change 可能尚未触发，否则验证的是 pref 旧值
+      const authVal = mcpAuthInput?.value.trim() || "";
+      if (authVal) {
+        if (currentInterface() === "local") {
+          setLocalMcpToken(authVal);
+        } else {
+          setApiKey(authVal);
+        }
+      }
       const json = mcpConfigInput?.value.trim() || "";
       const parsed = json ? parseMcpConfigJson(json) : getMcpConfig();
       if (!parsed || !parsed.apiKey) {
