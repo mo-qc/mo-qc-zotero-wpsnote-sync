@@ -1,6 +1,12 @@
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
-import { registerMenus, runSync, openSyncHistory } from "./modules/ui";
+import {
+  registerMenus,
+  unregisterMenus,
+  closeSyncHistoryWindow,
+  runSync,
+  openSyncHistory,
+} from "./modules/ui";
 import { syncSelectedItems, syncItem } from "./modules/syncEngine";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { getPref } from "./utils/prefs";
@@ -56,7 +62,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   );
 
   registerStyleSheet(win);
-  registerMenus();
+  registerMenus(win);
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
@@ -66,6 +72,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
     link.parentNode.removeChild(link);
     styleSheetRegistry.delete(win);
   }
+  unregisterMenus(win);
   ztoolkit.unregisterAll();
 }
 
@@ -86,6 +93,9 @@ function onShutdown(): void {
   }
   autoSyncTimers.clear();
 
+  // 关闭同步历史窗口，避免插件更新/禁用后残留孤儿窗口
+  closeSyncHistoryWindow();
+  unregisterMenus();
   ztoolkit.unregisterAll();
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
@@ -112,7 +122,11 @@ function resolveRegularItem(item: Zotero.Item): Zotero.Item | undefined {
       parentItem?.parentID && parentItem.parentID
         ? Zotero.Items.get(parentItem.parentID)
         : undefined;
-    if (grandParent?.isRegularItem && grandParent.isRegularItem()) {
+    if (
+      grandParent &&
+      grandParent.isRegularItem &&
+      grandParent.isRegularItem()
+    ) {
       return grandParent;
     }
     return undefined;

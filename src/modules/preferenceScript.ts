@@ -1,7 +1,17 @@
 import { config } from "../../package.json";
 import { buildNoteTitle, buildNoteXml } from "../utils/xmlBuilder";
 import type { ZoteroItemData } from "../utils/xmlBuilder";
-import { getMcpConfig, parseMcpConfigJson } from "../utils/prefs";
+import {
+  getMcpConfig,
+  parseMcpConfigJson,
+  getApiKey,
+  setApiKey,
+  getLocalMcpToken,
+  setLocalMcpToken,
+  setPref,
+} from "../utils/prefs";
+import { WpsMcpClient } from "./wpsMcpClient";
+import { renderSemanticXml } from "../utils/semanticRender";
 
 export async function registerPrefsScripts(_window: Window) {
   addon.data.prefs = {
@@ -99,20 +109,151 @@ function bindPrefEvents() {
   const mcpConfigStatus = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-mcpConfigStatus`,
   ) as HTMLParagraphElement | null;
+  const mcpInterfaceSelect = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpInterfaceType`,
+  ) as HTMLSelectElement | null;
+  const mcpAuthInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpAuth`,
+  ) as HTMLInputElement | null;
+  const mcpTestBtn = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpTestBtn`,
+  ) as HTMLButtonElement | null;
+  const mcpTestResult = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-mcpTestResult`,
+  ) as HTMLSpanElement | null;
 
   const refresh = () => refreshTemplatePreview();
 
   titleInput?.addEventListener("input", refresh);
   bodyInput?.addEventListener("input", refresh);
 
+  // 变量 chips：点击在正文模板光标处插入 {{var}}
+  const chips = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-varChips`,
+  );
+  chips?.addEventListener("click", (ev: Event) => {
+    const target = (ev.target as HTMLElement | null)?.closest(
+      ".zws-chip",
+    ) as HTMLElement | null;
+    if (!target || !bodyInput) return;
+    const variable = target.getAttribute("data-var");
+    if (!variable) return;
+    const snippet = `{{${variable}}}`;
+    const start = bodyInput.selectionStart ?? bodyInput.value.length;
+    const end = bodyInput.selectionEnd ?? start;
+    bodyInput.value =
+      bodyInput.value.slice(0, start) + snippet + bodyInput.value.slice(end);
+    const pos = start + snippet.length;
+    bodyInput.setSelectionRange(pos, pos);
+    bodyInput.focus();
+    bodyInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // 预览视图切换：渲染预览 / 源码
+  const viewSwitch = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-viewSwitch`,
+  );
+  const bodyPreviewEl = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-bodyPreview`,
+  ) as HTMLTextAreaElement | null;
+  const renderEl = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-bodyPreviewRender`,
+  ) as HTMLDivElement | null;
+  viewSwitch?.addEventListener("click", (ev: Event) => {
+    const btn = (ev.target as HTMLElement | null)?.closest(
+      ".zws-view-btn",
+    ) as HTMLElement | null;
+    if (!btn) return;
+    const view = btn.getAttribute("data-view");
+    viewSwitch
+      .querySelectorAll(".zws-view-btn")
+      .forEach((b: Element) => b.classList.toggle("active", b === btn));
+    bodyPreviewEl?.classList.toggle("zws-hidden", view !== "source");
+    renderEl?.classList.toggle("zws-hidden", view !== "render");
+  });
+
+  // MCP 简单配置：接口类型 + 单密钥输入
+  const currentInterface = (): "cloud" | "local" =>
+    mcpInterfaceSelect?.value === "local" ? "local" : "cloud";
+  const loadAuthValue = () => {
+    if (!mcpAuthInput) return;
+    mcpAuthInput.value =
+      currentInterface() === "local" ? getLocalMcpToken() : getApiKey();
+  };
+  const refreshMcpStatus = () => {
+    if (mcpConfigInput && mcpConfigStatus) {
+      updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
+    }
+  };
+  loadAuthValue();
+  refreshMcpStatus();
+  // preference 属性回填 textarea 是异步的，回填后再刷一次状态
+  setTimeout(refreshMcpStatus, 200);
+
+  mcpInterfaceSelect?.addEventListener("change", () => {
+    loadAuthValue();
+    refreshMcpStatus();
+  });
+  mcpAuthInput?.addEventListener("change", () => {
+    const value = mcpAuthInput.value.trim();
+    if (currentInterface() === "local") {
+      setLocalMcpToken(value);
+    } else {
+      setApiKey(value);
+    }
+    // 简单配置接管：清空已粘贴的 JSON，避免旧 JSON 静默覆盖新密钥
+    if (mcpConfigInput && mcpConfigInput.value.trim()) {
+      mcpConfigInput.value = "";
+    }
+    setPref("mcpConfigJson", "");
+    refreshMcpStatus();
+  });
+
   // MCP JSON 配置实时校验与状态提示
   if (mcpConfigInput && mcpConfigStatus) {
-    updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
     mcpConfigInput.addEventListener("input", () => {
       updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
     });
     mcpConfigInput.addEventListener("change", () => {
       updateMcpConfigStatus(mcpConfigInput, mcpConfigStatus);
+    });
+  }
+
+  // 验证配置：解析 JSON（或回退简单配置）后实际连接 MCP 端点
+  if (mcpTestBtn && mcpTestResult) {
+    const btnLabel = mcpTestBtn.textContent || "验证配置";
+    mcpTestBtn.addEventListener("click", async () => {
+      const json = mcpConfigInput?.value.trim() || "";
+      const parsed = json ? parseMcpConfigJson(json) : getMcpConfig();
+      if (!parsed || !parsed.apiKey) {
+        mcpTestResult.className = "zws-mcp-test-result error";
+        mcpTestResult.textContent = json
+          ? "JSON 无法解析：请检查是否包含 mcpServers 与 url/headers。"
+          : "当前无可用配置：请粘贴 JSON 或在上方填写密钥。";
+        return;
+      }
+      mcpTestBtn.disabled = true;
+      mcpTestBtn.textContent = "测试中…";
+      mcpTestResult.className = "zws-mcp-test-result pending";
+      mcpTestResult.textContent = `正在连接 ${parsed.endpoint} …`;
+      try {
+        const client = new WpsMcpClient({
+          ...parsed,
+          timeout: 15000,
+          retries: 0,
+        });
+        await client.initialize();
+        mcpTestResult.className = "zws-mcp-test-result ok";
+        mcpTestResult.textContent = `连接成功：${
+          parsed.interfaceType === "local" ? "本地" : "云端"
+        } MCP（${parsed.endpoint}）`;
+      } catch (e: any) {
+        mcpTestResult.className = "zws-mcp-test-result error";
+        mcpTestResult.textContent = `连接失败：${e?.message || String(e)}`;
+      } finally {
+        mcpTestBtn.disabled = false;
+        mcpTestBtn.textContent = btnLabel;
+      }
     });
   }
 
@@ -126,17 +267,22 @@ function updateMcpConfigStatus(
   const value = input.value.trim();
   if (!value) {
     const config = getMcpConfig();
-    status.className = "zws-mcp-status fallback";
-    status.textContent = `未粘贴 JSON，当前使用旧版${
-      config.interfaceType === "local" ? "本地" : "云端"
-    }配置（${config.endpoint}）。`;
+    if (config.apiKey) {
+      status.className = "zws-mcp-status ok";
+      status.textContent = `使用简单配置：${
+        config.interfaceType === "local" ? "本地" : "云端"
+      } MCP（${config.endpoint}），密钥已设置。`;
+    } else {
+      status.className = "zws-mcp-status fallback";
+      status.textContent = "未配置密钥，请在上方填写 API Key / Authorization。";
+    }
     return;
   }
 
   const parsed = parseMcpConfigJson(value);
   if (parsed) {
     status.className = "zws-mcp-status ok";
-    status.textContent = `配置有效：已识别为${
+    status.textContent = `JSON 配置有效（优先于简单配置）：已识别为${
       parsed.interfaceType === "local" ? "本地" : "云端"
     } MCP（${parsed.endpoint}）。`;
   } else {
@@ -162,6 +308,9 @@ function refreshTemplatePreview() {
   const bodyPreview = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-bodyPreview`,
   ) as HTMLTextAreaElement | null;
+  const bodyPreviewRender = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-bodyPreviewRender`,
+  ) as HTMLDivElement | null;
 
   if (!titlePreview || !bodyPreview) return;
 
@@ -172,9 +321,27 @@ function refreshTemplatePreview() {
     titlePreview.value = `标题渲染错误：${e?.message || String(e)}`;
   }
 
+  let xml = "";
   try {
-    bodyPreview.value = buildNoteXml(example, bodyInput?.value || "");
+    xml = buildNoteXml(example, bodyInput?.value || "");
+    bodyPreview.value = xml;
   } catch (e: any) {
     bodyPreview.value = `正文渲染错误：${e?.message || String(e)}`;
+  }
+
+  if (bodyPreviewRender) {
+    const html = xml ? renderSemanticXml(xml) : "";
+    if (html) {
+      // XUL 文档内元素直接赋 innerHTML 会被剥掉标签，经游离元素中转再移动子节点
+      const tmp = doc.createElement("div");
+      tmp.innerHTML = html;
+      const nodes = Array.from(tmp.childNodes).filter(
+        (n): n is Node => n !== null,
+      );
+      bodyPreviewRender.replaceChildren(...nodes);
+    } else {
+      bodyPreviewRender.textContent =
+        "预览渲染失败（输出不是合法 XML），请切换到「源码」查看。";
+    }
   }
 }

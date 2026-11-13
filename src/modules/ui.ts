@@ -103,7 +103,7 @@ async function promptConflict(title: string): Promise<ConflictResolution> {
       namespace: "html",
       properties: {
         innerHTML: `
-          <div style="font-size:15px;font-weight:600;color:#0f172a;margin:0 0 8px 0;">文献已变更</div>
+          <div style="font-size:16px;font-weight:600;color:#0f172a;margin:0 0 8px 0;">文献已变更</div>
           <p style="font-size:13px;line-height:1.6;margin:0;color:#475569;">
             文献「${escapeHtml(title.slice(0, 40))}」在 Zotero 中已变更，可能已同步过到 WPS 笔记。<br/>
             请选择处理方式：
@@ -115,10 +115,10 @@ async function promptConflict(title: string): Promise<ConflictResolution> {
       tag: "label",
       namespace: "html",
       properties: {
-        innerHTML: `<input type="checkbox" data-bind="remember" data-prop="checked" style="width:14px;height:14px;accent-color:#2563eb;margin-right:8px;cursor:pointer;"/>记住选择，应用到本次同步的其余冲突`,
+        innerHTML: `<input type="checkbox" data-bind="remember" data-prop="checked" style="width:16px;height:16px;accent-color:#2563eb;margin-right:8px;cursor:pointer;"/>记住选择，应用到本次同步的其余冲突`,
       },
       styles: {
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#475569",
         display: "flex",
         alignItems: "center",
@@ -384,8 +384,11 @@ async function retryFailedItems(itemKeys: string[]) {
   refreshSyncHistory();
 }
 
-function bindHistoryActions(win: Window): () => void {
-  const doc = win.document;
+function bindHistoryActions(iframe: HTMLIFrameElement): () => void {
+  // Zotero 10 的 XUL 文档用 innerHTML 解析时会丢弃 input/button 等表单控件，
+  // 因此历史窗口内容写在 HTML iframe 文档里，事件也绑定在 iframe 上
+  const win = iframe.contentWindow!;
+  const doc = iframe.contentDocument!;
   type ListenerEntry = {
     target: EventTarget;
     type: string;
@@ -568,6 +571,17 @@ function applyHistoryFilter(win: Window, keyword: string) {
     });
 }
 
+export function closeSyncHistoryWindow() {
+  if (!isWindowClosed(syncHistoryWindow)) {
+    try {
+      syncHistoryWindow!.close();
+    } catch (e) {
+      ztoolkit.log("Failed to close sync history window", e);
+    }
+  }
+  syncHistoryWindow = null;
+}
+
 export function openSyncHistory() {
   // 如果窗口已存在且未关闭，则聚焦并返回
   if (!isWindowClosed(syncHistoryWindow)) {
@@ -633,108 +647,248 @@ ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKe
     ([, entry]) => entry.lastSuccess === false,
   ).length;
 
-  const tableHtml = `
+  const historyDocHtml = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
 <style>
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background: #ffffff;
+  }
+  body {
+    overflow: auto;
+  }
   .zws-history-window {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-    color: #0f172a;
+    /* Brand */
+    --zws-primary: #2563eb;
+    --zws-primary-hover: #1d4ed8;
+    --zws-primary-subtle: #eff6ff;
+    --zws-primary-ring: rgba(37, 99, 235, 0.25);
+    /* Neutral */
+    --zws-bg: #ffffff;
+    --zws-surface: #f8fafc;
+    --zws-surface-hover: #f1f5f9;
+    --zws-border: #e2e8f0;
+    --zws-border-strong: #cbd5e1;
+    /* Text */
+    --zws-text: #0f172a;
+    --zws-text-secondary: #475569;
+    --zws-text-muted: #64748b;
+    --zws-text-placeholder: #94a3b8;
+    /* Status */
+    --zws-success: #10b981;
+    --zws-success-subtle: #ecfdf5;
+    --zws-success-text: #047857;
+    --zws-error: #ef4444;
+    --zws-error-subtle: #fef2f2;
+    --zws-error-text: #b91c1c;
+    --zws-warning: #f59e0b;
+    --zws-warning-subtle: #fffbeb;
+    --zws-warning-text: #b45309;
+    /* Radius */
+    --zws-radius-sm: 6px;
+    --zws-radius-md: 10px;
+    /* Shadows */
+    --zws-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    /* Typography */
+    --zws-font:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --zws-font-mono:
+      "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+      "PingFang SC", monospace;
+
+    font-family: var(--zws-font);
+    color: var(--zws-text);
   }
   .zws-history-toolbar {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    border-radius: 10px 10px 0 0;
+    padding: 12px 16px;
+    background: var(--zws-surface);
+    border-bottom: 1px solid var(--zws-border);
+    border-radius: var(--zws-radius-md) var(--zws-radius-md) 0 0;
     flex-wrap: wrap;
   }
   .zws-history-search {
     flex: 1;
     min-width: 140px;
     max-width: 260px;
-    font-size: 12px;
-    padding: 5px 10px;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
+    font-family: var(--zws-font);
+    font-size: 13px;
+    padding: 8px 12px;
+    color: var(--zws-text);
+    background: var(--zws-bg);
+    border: 1px solid var(--zws-border-strong);
+    border-radius: var(--zws-radius-md);
     outline: none;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
   }
-  .zws-history-search:focus { border-color: #3b82f6; }
+  .zws-history-search:focus {
+    border-color: var(--zws-primary);
+    box-shadow: 0 0 0 3px var(--zws-primary-ring);
+  }
   .zws-history-filter-group {
     display: flex;
     gap: 4px;
   }
   .zws-history-filter {
-    font-size: 11px;
+    font-family: var(--zws-font);
+    font-size: 12px;
+    font-weight: 500;
     padding: 4px 10px;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    background: #ffffff;
-    color: #475569;
+    border: 1px solid var(--zws-border);
+    border-radius: var(--zws-radius-sm);
+    background: var(--zws-bg);
+    color: var(--zws-text-secondary);
     cursor: pointer;
+    transition: background 0.15s;
   }
-  .zws-history-filter.active { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+  .zws-history-filter:hover {
+    background: var(--zws-surface-hover);
+  }
+  .zws-history-filter.active {
+    background: var(--zws-primary-subtle);
+    border-color: #bfdbfe;
+    color: var(--zws-primary-hover);
+  }
   .zws-history-table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 12px;
+    font-size: 13px;
   }
   .zws-history-table th {
     position: sticky;
     top: 0;
     z-index: 1;
-    background: #f8fafc;
-    color: #475569;
+    background: var(--zws-surface);
+    color: var(--zws-text-secondary);
     font-weight: 600;
     text-align: left;
     padding: 10px 12px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--zws-border);
   }
-  .zws-history-table tbody tr:hover { background: #f8fafc; }
+  /* 错误列无内容时会被压到逐字竖排，nowrap+定宽保证表头横排 */
+  .zws-history-table th:nth-child(6) {
+    width: 76px;
+    white-space: nowrap;
+  }
+  .zws-history-table th:first-child {
+    border-top-left-radius: var(--zws-radius-md);
+  }
+  .zws-history-table th:last-child {
+    border-top-right-radius: var(--zws-radius-md);
+  }
+  .zws-history-table tbody tr:hover {
+    background: var(--zws-surface-hover);
+  }
   .zws-history-cell {
     padding: 10px 12px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--zws-border);
     vertical-align: middle;
   }
-  .zws-history-title { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .zws-history-mono { font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace; color: #64748b; white-space: nowrap; }
-  .zws-history-error { color: #ef4444; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zws-history-title {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .zws-history-mono {
+    font-family: var(--zws-font-mono);
+    color: var(--zws-text-muted);
+    white-space: nowrap;
+  }
+  .zws-history-error {
+    color: var(--zws-error);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .zws-history-status {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     padding: 2px 8px;
     border-radius: 999px;
-    background: #f1f5f9;
-    color: #475569;
+    background: var(--zws-surface-hover);
+    color: var(--zws-text-secondary);
   }
-  .zws-history-status.zws-status-success { background: #ecfdf5; color: #047857; }
-  .zws-history-status.zws-status-error { background: #fef2f2; color: #b91c1c; }
-  .zws-history-status.zws-status-pending { background: #fffbeb; color: #b45309; }
-  .zws-history-actions { white-space: nowrap; display: flex; gap: 6px; }
+  .zws-history-status.zws-status-success {
+    background: var(--zws-success-subtle);
+    color: var(--zws-success-text);
+  }
+  .zws-history-status.zws-status-error {
+    background: var(--zws-error-subtle);
+    color: var(--zws-error-text);
+  }
+  .zws-history-status.zws-status-pending {
+    background: var(--zws-warning-subtle);
+    color: var(--zws-warning-text);
+  }
+  .zws-history-actions {
+    white-space: nowrap;
+    display: flex;
+    gap: 6px;
+  }
   .zws-history-btn {
-    font-family: inherit;
-    font-size: 11px;
+    font-family: var(--zws-font);
+    font-size: 12px;
     font-weight: 500;
     padding: 4px 10px;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    background: #ffffff;
-    color: #475569;
+    border: 1px solid var(--zws-border);
+    border-radius: var(--zws-radius-sm);
+    background: var(--zws-surface);
+    color: var(--zws-text-secondary);
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
   }
-  .zws-history-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
-  .zws-history-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .zws-history-btn-primary { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
-  .zws-history-btn-primary:hover:not(:disabled) { background: #dbeafe; }
-  .zws-history-btn-danger { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
-  .zws-history-btn-danger:hover:not(:disabled) { background: #fee2e2; }
-  .zws-history-empty { padding: 32px; text-align: center; color: #94a3b8; font-size: 13px; }
+  .zws-history-btn:hover:not(:disabled) {
+    background: var(--zws-surface-hover);
+    border-color: var(--zws-border-strong);
+  }
+  .zws-history-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .zws-history-btn-primary {
+    background: var(--zws-primary);
+    border-color: var(--zws-primary);
+    color: #ffffff;
+  }
+  .zws-history-btn-primary:hover:not(:disabled) {
+    background: var(--zws-primary-hover);
+    border-color: var(--zws-primary-hover);
+  }
+  .zws-history-btn-danger {
+    background: var(--zws-error-subtle);
+    border-color: #fecaca;
+    color: var(--zws-error);
+  }
+  .zws-history-btn-danger:hover:not(:disabled) {
+    background: #fee2e2;
+  }
+  .zws-history-empty {
+    padding: 32px;
+    text-align: center;
+    color: var(--zws-text-placeholder);
+    font-size: 13px;
+  }
 </style>
+</head>
+<body>
 <div class="zws-history-window">
   <div class="zws-history-toolbar">
     <input id="zws-history-search" class="zws-history-search" type="text" placeholder="搜索标题、Key、Note ID、错误..."/>
@@ -763,30 +917,118 @@ ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKe
       ${rows || '<tr><td colspan="7" class="zws-history-empty">暂无同步记录</td></tr>'}
     </tbody>
   </table>
-</div>`;
+</div>
+</body>
+</html>`;
 
   const dialog = new (ztoolkit as any).Dialog(1, 1);
   const win = dialog
     .addCell(0, 0, {
       tag: "div",
       namespace: "html",
-      properties: { innerHTML: tableHtml },
+      properties: { id: "zws-history-host" },
       styles: {
-        overflow: "auto",
-        maxHeight: "440px",
         width: "100%",
-        padding: "4px",
+        height: "480px",
+        padding: "0",
+        overflow: "hidden",
       },
     })
     .open(getString("sync-history-title"), {
-      width: 920,
+      // 表格各列 min-content 合计约 967px，窗口需容纳否则操作列被裁
+      width: 1000,
       height: 540,
       centerscreen: true,
       resizable: true,
     });
 
   syncHistoryWindow = win;
-  bindHistoryActions(win);
+
+  // Dialog.open 返回时窗口 document 可能尚未就绪（win.document 为 undefined），
+  // 轮询等待 host 渲染完成后再挂载 iframe
+  let mountTries = 0;
+  const findHistoryDoc = (): Document | undefined => {
+    try {
+      if (
+        win &&
+        win.document &&
+        win.document.getElementById("zws-history-host")
+      ) {
+        return win.document;
+      }
+    } catch (e) {
+      // win.document 尚未就绪，走枚举兜底
+    }
+    try {
+      const wins = Services.wm.getEnumerator(null);
+      while (wins.hasMoreElements()) {
+        const w = wins.getNext();
+        try {
+          const d = w.document;
+          // 只认空 host：插件热重载残留的孤儿窗口也带同名 host，
+          // 挂到孤儿上会让新窗口永远空白
+          const host = d && d.getElementById("zws-history-host");
+          if (host && !host.querySelector("iframe")) return d;
+        } catch (e) {
+          // 个别窗口 document 暂不可访问
+        }
+      }
+    } catch (e) {
+      // 枚举失败时继续重试
+    }
+    return undefined;
+  };
+  const mountHistoryIframe = () => {
+    try {
+      const doc = findHistoryDoc();
+      if (!doc) return false;
+      const host = doc.getElementById("zws-history-host");
+      if (!host) return false;
+      let iframe = host.querySelector("iframe") as HTMLIFrameElement | null;
+      if (!iframe) {
+        iframe = doc.createElement("iframe");
+        iframe.style.cssText = "width:100%;height:100%;border:0;margin:0;";
+        // bootstrap sandbox 对 about:blank 文档执行 document.write 会抛
+        // SecurityError("The operation is insecure")，改用 srcdoc 由引擎注入；
+        // srcdoc 文档继承宿主 chrome principal，load 后可正常读 contentDocument。
+        // iframe 首次 load 可能是初始 about:blank（body 为空），此时轮询等待
+        // srcdoc 文档就绪后再绑定，避免错过唯一一次 load
+        let bound = false;
+        const tryBind = () => {
+          if (bound) return;
+          try {
+            const idoc = iframe!.contentDocument;
+            if (idoc && idoc.body && idoc.body.childElementCount > 0) {
+              bindHistoryActions(iframe!);
+              bound = true;
+              return;
+            }
+          } catch (e) {
+            ztoolkit.log("bind history actions failed", e);
+            bound = true;
+            return;
+          }
+          setTimeout(tryBind, 50);
+        };
+        iframe.addEventListener("load", tryBind);
+        iframe.srcdoc = historyDocHtml;
+        host.appendChild(iframe);
+        // load 未触发的兜底（srcdoc 就绪早于监听等极端时序）
+        setTimeout(tryBind, 100);
+      }
+      return true;
+    } catch (e) {
+      ztoolkit.log("mount history iframe failed", e);
+      return false;
+    }
+  };
+  const tryMount = () => {
+    if (mountHistoryIframe()) return;
+    if (++mountTries < 100) {
+      setTimeout(tryMount, 50);
+    }
+  };
+  tryMount();
 }
 
 export async function runSync(force = false) {
@@ -854,55 +1096,98 @@ export async function runSync(force = false) {
   }
 }
 
-export function registerMenus() {
+// toolkit 6.0 移除了 Menu 工具，改为直接向 Zotero 原生菜单 popup 注入 menuitem
+type MenuRegistration = { win: Window; id: string };
+const menuRegistrations: MenuRegistration[] = [];
+
+function appendMenuItem(
+  win: Window,
+  popupId: string,
+  id: string,
+  label: string,
+  icon: string,
+  onCommand: () => void,
+) {
+  const doc = win.document;
+  const popup = doc.getElementById(popupId);
+  if (!popup) {
+    ztoolkit.log("Menu popup not found", popupId);
+    return;
+  }
+  doc.getElementById(id)?.remove();
+  const item = doc.createXULElement("menuitem");
+  item.setAttribute("id", id);
+  item.setAttribute("label", label);
+  if (icon) item.setAttribute("image", icon);
+  item.addEventListener("command", onCommand);
+  popup.appendChild(item);
+  menuRegistrations.push({ win, id });
+}
+
+export function registerMenus(win: Window) {
   const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon@0.5x.png`;
 
-  ztoolkit.Menu.register("item", {
-    tag: "menuitem",
-    id: `zotero-wpsnote-sync-menuitem`,
-    label: getString("menu-sync-to-wpsnote"),
-    icon: menuIcon,
-    commandListener: (ev) => {
+  appendMenuItem(
+    win,
+    "zotero-itemmenu",
+    "zotero-wpsnote-sync-menuitem",
+    getString("menu-sync-to-wpsnote"),
+    menuIcon,
+    () => {
       runSync();
     },
-  });
-
-  ztoolkit.Menu.register("item", {
-    tag: "menuitem",
-    id: `zotero-wpsnote-sync-force-menuitem`,
-    label: getString("menu-force-sync-to-wpsnote"),
-    icon: menuIcon,
-    commandListener: (ev) => {
+  );
+  appendMenuItem(
+    win,
+    "zotero-itemmenu",
+    "zotero-wpsnote-sync-force-menuitem",
+    getString("menu-force-sync-to-wpsnote"),
+    menuIcon,
+    () => {
       runSync(true);
     },
-  });
-
-  ztoolkit.Menu.register("collection", {
-    tag: "menuitem",
-    id: `zotero-wpsnote-sync-collection-menuitem`,
-    label: getString("menu-sync-collection-to-wpsnote"),
-    icon: menuIcon,
-    commandListener: (ev) => {
+  );
+  appendMenuItem(
+    win,
+    "zotero-collectionmenu",
+    "zotero-wpsnote-sync-collection-menuitem",
+    getString("menu-sync-collection-to-wpsnote"),
+    menuIcon,
+    () => {
       runSync();
     },
-  });
-
-  ztoolkit.Menu.register("collection", {
-    tag: "menuitem",
-    id: `zotero-wpsnote-sync-force-collection-menuitem`,
-    label: getString("menu-force-sync-collection-to-wpsnote"),
-    icon: menuIcon,
-    commandListener: (ev) => {
+  );
+  appendMenuItem(
+    win,
+    "zotero-collectionmenu",
+    "zotero-wpsnote-sync-force-collection-menuitem",
+    getString("menu-force-sync-collection-to-wpsnote"),
+    menuIcon,
+    () => {
       runSync(true);
     },
-  });
-
-  ztoolkit.Menu.register("menuTools", {
-    tag: "menuitem",
-    id: `zotero-wpsnote-sync-history-menuitem`,
-    label: getString("menu-sync-history"),
-    commandListener: (ev) => {
+  );
+  appendMenuItem(
+    win,
+    "menu_ToolsPopup",
+    "zotero-wpsnote-sync-history-menuitem",
+    getString("menu-sync-history"),
+    menuIcon,
+    () => {
       openSyncHistory();
     },
-  });
+  );
+}
+
+export function unregisterMenus(win?: Window) {
+  for (let i = menuRegistrations.length - 1; i >= 0; i--) {
+    const reg = menuRegistrations[i];
+    if (win && reg.win !== win) continue;
+    try {
+      reg.win.document.getElementById(reg.id)?.remove();
+    } catch (e) {
+      ztoolkit.log("Failed to remove menuitem", reg.id, e);
+    }
+    menuRegistrations.splice(i, 1);
+  }
 }

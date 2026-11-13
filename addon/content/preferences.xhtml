@@ -5,47 +5,130 @@
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
   <html:style>
-    .zws-prefs-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe
-    UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei",
-    sans-serif; color: #0f172a; line-height: 1.5; padding: 8px 4px 16px 4px;
-    max-width: 760px; } .zws-prefs-header { display: flex; align-items: center;
-    gap: 12px; margin-bottom: 20px; } .zws-prefs-header h2 { font-size: 18px;
-    font-weight: 600; margin: 0; color: #0f172a; } .zws-prefs-header
-    .zws-version { font-size: 12px; color: #64748b; margin-left: auto; }
-    .zws-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius:
-    12px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); padding: 18px 20px;
-    margin-bottom: 16px; } .zws-card-title { font-size: 13px; font-weight: 600;
-    color: #0f172a; margin: 0 0 14px 0; padding-bottom: 10px; border-bottom: 1px
-    solid #e2e8f0; } .zws-form-row { display: flex; align-items: center; gap:
-    14px; margin-bottom: 12px; } .zws-form-row:last-child { margin-bottom: 0; }
-    .zws-form-row.zws-top { align-items: flex-start; } .zws-label { min-width:
-    120px; max-width: 120px; font-size: 12px; font-weight: 500; color: #475569;
-    flex-shrink: 0; padding-top: 7px; } .zws-input, .zws-select, .zws-textarea {
-    flex: 1; min-width: 0; font-family: inherit; font-size: 12px; padding: 7px
-    10px; color: #0f172a; background: #ffffff; border: 1px solid #cbd5e1;
-    border-radius: 8px; outline: none; transition: border-color 0.15s,
+    /* 设计 token 挂在根节点上，避免污染 Zotero 全局样式 */ .zws-prefs-root { /*
+    Brand */ --zws-primary: #2563eb; --zws-primary-hover: #1d4ed8;
+    --zws-primary-subtle: #eff6ff; --zws-primary-ring: rgba(37, 99, 235, 0.25);
+    /* Neutral */ --zws-bg: #ffffff; --zws-surface: #f8fafc;
+    --zws-surface-hover: #f1f5f9; --zws-border: #e2e8f0; --zws-border-strong:
+    #cbd5e1; /* Text */ --zws-text: #0f172a; --zws-text-secondary: #475569;
+    --zws-text-muted: #64748b; /* Status */ --zws-success-subtle: #ecfdf5;
+    --zws-success-text: #047857; --zws-error: #ef4444; --zws-error-subtle:
+    #fef2f2; --zws-error-text: #b91c1c; --zws-warning-subtle: #fffbeb;
+    --zws-warning-text: #b45309; /* Radius */ --zws-radius-sm: 6px;
+    --zws-radius-md: 10px; --zws-radius-lg: 14px; /* Shadows */ --zws-shadow-sm:
+    0 1px 2px rgba(15, 23, 42, 0.04); /* Spacing */ --zws-gap-xs: 4px;
+    --zws-gap-sm: 8px; --zws-gap-md: 16px; --zws-gap-lg: 24px; /* Typography */
+    --zws-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --zws-font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+    Consolas, "PingFang SC", monospace; font-family: var(--zws-font); color:
+    var(--zws-text); line-height: 1.5; padding: 32px 24px; max-width: 720px;
+    margin: 0 auto; } .zws-prefs-header { display: flex; align-items: center;
+    gap: 12px; margin-bottom: 24px; } .zws-prefs-header h2 { font-size: 20px;
+    font-weight: 600; margin: 0; color: var(--zws-text); white-space: nowrap;
+    flex-shrink: 0; } .zws-prefs-header .zws-version { font-size: 12px; color:
+    var(--zws-text-muted); margin-left: auto; text-align: right; min-width: 0; }
+    .zws-card { background: var(--zws-bg); border: 1px solid var(--zws-border);
+    border-radius: var(--zws-radius-lg); box-shadow: var(--zws-shadow-sm);
+    padding: var(--zws-gap-lg); margin-bottom: 20px; } .zws-card:last-child {
+    margin-bottom: 0; } .zws-card-title { font-size: 14px; font-weight: 600;
+    color: var(--zws-text); margin: 0 0 var(--zws-gap-md) 0; padding-bottom:
+    var(--zws-gap-sm); border-bottom: 1px solid var(--zws-border); }
+    .zws-form-row { display: flex; align-items: center; gap: var(--zws-gap-md);
+    margin-bottom: var(--zws-gap-md); } .zws-form-row:last-child {
+    margin-bottom: 0; } .zws-form-row.zws-top { align-items: flex-start; }
+    .zws-label { min-width: 120px; max-width: 120px; font-size: 13px;
+    font-weight: 500; color: var(--zws-text-secondary); flex-shrink: 0;
+    padding-top: 7px; } .zws-input, .zws-select, .zws-textarea { flex: 1;
+    min-width: 0; box-sizing: border-box; font-family: var(--zws-font);
+    font-size: 13px; padding: 8px 12px; color: var(--zws-text); background:
+    var(--zws-bg); border: 1px solid var(--zws-border-strong); border-radius:
+    var(--zws-radius-md); outline: none; transition: border-color 0.15s,
     box-shadow 0.15s; } .zws-input:hover, .zws-select:hover, .zws-textarea:hover
     { border-color: #94a3b8; } .zws-input:focus, .zws-select:focus,
-    .zws-textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,
-    99, 235, 0.18); } .zws-textarea { resize: vertical; line-height: 1.5; }
-    .zws-checkbox-grid { display: grid; grid-template-columns: repeat(2,
-    minmax(0, 1fr)); gap: 8px 16px; } .zws-checkbox-row { display: flex;
-    align-items: center; gap: 8px; font-size: 12px; color: #475569; cursor:
-    pointer; user-select: none; } .zws-checkbox-row input[type="checkbox"] {
-    width: 15px; height: 15px; accent-color: #2563eb; cursor: pointer;
-    flex-shrink: 0; } .zws-help-text { font-size: 11px; color: #64748b;
-    margin-top: 4px; line-height: 1.5; } .zws-preview { background: #f8fafc;
-    border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; font-family:
-    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
-    font-size: 11px; color: #475569; line-height: 1.6; white-space: pre-wrap;
-    overflow: auto; max-height: 240px; } .zws-preview-label { font-size: 12px;
-    font-weight: 500; color: #475569; margin: 14px 0 6px 0; display: block; }
-    .zws-preview-label:first-child { margin-top: 0; } .zws-hidden { display:
-    none !important; } .zws-mcp-status { font-size: 12px; margin-top: 8px;
-    padding: 6px 10px; border-radius: 6px; line-height: 1.5; }
-    .zws-mcp-status.ok { color: #166534; background: #dcfce7; }
-    .zws-mcp-status.error { color: #991b1b; background: #fee2e2; }
-    .zws-mcp-status.fallback { color: #713f12; background: #fef9c3; }
+    .zws-textarea:focus { border-color: var(--zws-primary); box-shadow: 0 0 0
+    3px var(--zws-primary-ring); } .zws-textarea { width: 100%; resize:
+    vertical; line-height: 1.6; } .zws-checkbox-grid { display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+    .zws-checkbox-row { display: flex; align-items: center; gap:
+    var(--zws-gap-sm); font-size: 13px; color: var(--zws-text-secondary);
+    cursor: pointer; user-select: none; } .zws-checkbox-row
+    input[type="checkbox"] { width: 16px; height: 16px; accent-color:
+    var(--zws-primary); cursor: pointer; flex-shrink: 0; } .zws-help-text {
+    font-size: 12px; color: var(--zws-text-muted); margin-top:
+    var(--zws-gap-xs); line-height: 1.5; } .zws-preview { background:
+    var(--zws-surface); border: 1px dashed var(--zws-border-strong);
+    border-radius: var(--zws-radius-md); padding: var(--zws-gap-md);
+    font-family: var(--zws-font-mono); font-size: 12px; color:
+    var(--zws-text-secondary); line-height: 1.6; white-space: pre-wrap;
+    overflow: auto; max-height: 240px; } .zws-preview-label { font-size: 13px;
+    font-weight: 500; color: var(--zws-text-secondary); margin: 14px 0 6px 0;
+    display: block; } .zws-preview-label:first-child { margin-top: 0; }
+    .zws-hidden { display: none !important; } .zws-mcp-status { font-size: 12px;
+    margin-top: var(--zws-gap-sm); padding: 6px 10px; border-radius:
+    var(--zws-radius-sm); line-height: 1.5; } .zws-mcp-status.ok { color:
+    var(--zws-success-text); background: var(--zws-success-subtle); }
+    .zws-mcp-status.error { color: var(--zws-error-text); background:
+    var(--zws-error-subtle); } .zws-mcp-status.fallback { color:
+    var(--zws-warning-text); background: var(--zws-warning-subtle); }
+    .zws-mcp-test-row { display: flex; align-items: center; gap:
+    var(--zws-gap-sm); margin-top: var(--zws-gap-sm); flex-wrap: wrap; }
+    .zws-btn { font-family: var(--zws-font); font-size: 13px; font-weight: 500;
+    padding: 7px 16px; color: #ffffff; background: var(--zws-primary); border:
+    1px solid var(--zws-primary); border-radius: var(--zws-radius-md); cursor:
+    pointer; transition: background 0.15s; } .zws-btn:hover:not(:disabled) {
+    background: var(--zws-primary-hover); } .zws-btn:disabled { opacity: 0.6;
+    cursor: default; } .zws-mcp-test-result { font-size: 12px; line-height: 1.5;
+    } .zws-mcp-test-result.ok { color: var(--zws-success-text); }
+    .zws-mcp-test-result.error { color: var(--zws-error-text); }
+    .zws-mcp-test-result.pending { color: var(--zws-text-muted); }
+    .zws-var-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top:
+    var(--zws-gap-sm); } .zws-chip { font-family: var(--zws-font-mono);
+    font-size: 12px; padding: 3px 10px; color: var(--zws-text-secondary);
+    background: var(--zws-surface); border: 1px solid var(--zws-border-strong);
+    border-radius: 999px; cursor: pointer; transition: all 0.15s; }
+    .zws-chip:hover { color: var(--zws-primary); border-color:
+    var(--zws-primary); background: var(--zws-primary-ring); } .zws-view-bar {
+    display: flex; align-items: center; gap: 8px; margin: 14px 0 6px 0; }
+    .zws-view-bar .zws-preview-label { margin: 0; flex: 1; } .zws-view-switch {
+    display: flex; gap: 0; border: 1px solid var(--zws-border-strong);
+    border-radius: var(--zws-radius-md); overflow: hidden; } .zws-view-btn {
+    font-family: var(--zws-font); font-size: 12px; padding: 4px 12px; color:
+    var(--zws-text-secondary); background: var(--zws-bg); border: none; cursor:
+    pointer; transition: all 0.15s; } .zws-view-btn + .zws-view-btn {
+    border-left: 1px solid var(--zws-border-strong); } .zws-view-btn.active {
+    color: #ffffff; background: var(--zws-primary); } .zws-render-view {
+    background: var(--zws-bg); border: 1px solid var(--zws-border-strong);
+    border-radius: var(--zws-radius-md); padding: 12px 14px; font-family:
+    var(--zws-font); font-size: 13px; color: var(--zws-text); line-height: 1.7;
+    overflow: auto; max-height: 360px; min-height: 120px; } .zws-render-view
+    .rv-h { margin: 10px 0 6px 0; font-weight: 600; color: var(--zws-text); }
+    .zws-render-view h1.rv-h { font-size: 18px; } .zws-render-view h2.rv-h {
+    font-size: 16px; } .zws-render-view h3.rv-h, .zws-render-view h4.rv-h,
+    .zws-render-view h5.rv-h, .zws-render-view h6.rv-h { font-size: 14px; }
+    .zws-render-view .rv-p { margin: 4px 0; } .zws-render-view .rv-li {
+    position: relative; } .zws-render-view .rv-marker { position: absolute;
+    left: 0; color: var(--zws-text-muted); } .zws-render-view .rv-quote {
+    margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--zws-primary);
+    color: var(--zws-text-secondary); background: var(--zws-surface); }
+    .zws-render-view .rv-code { font-family: var(--zws-font-mono); font-size:
+    12px; background: var(--zws-surface); padding: 1px 5px; border-radius: 4px;
+    } .zws-render-view .rv-a { color: var(--zws-primary); } .zws-render-view
+    .rv-hl { display: flex; gap: 8px; border: 1px solid; border-radius:
+    var(--zws-radius-md); padding: 8px 10px; margin: 6px 0; } .zws-render-view
+    .rv-hl-body { flex: 1; min-width: 0; } .zws-render-view .rv-hr { border:
+    none; border-top: 1px solid var(--zws-border); margin: 8px 0; }
+    .zws-render-view .rv-table { border-collapse: collapse; margin: 6px 0; }
+    .zws-render-view .rv-td { border: 1px solid var(--zws-border-strong);
+    padding: 4px 8px; } .zws-render-view .rv-cols { display: flex; gap: 8px;
+    margin: 6px 0; } .zws-render-view .rv-col { flex: 1; min-width: 0; padding:
+    6px; border: 1px dashed var(--zws-border-strong); border-radius:
+    var(--zws-radius-sm); } .zws-render-view .rv-pre { font-family:
+    var(--zws-font-mono); font-size: 12px; background: var(--zws-surface);
+    padding: 8px 10px; border-radius: var(--zws-radius-sm); overflow: auto;
+    white-space: pre-wrap; } .zws-render-view .rv-img, .zws-render-view
+    .rv-ainote { color: var(--zws-text-muted); font-size: 12px; }
+    .zws-render-empty { color: var(--zws-text-muted); font-size: 12px; }
   </html:style>
 
   <html:div class="zws-prefs-root">
@@ -72,7 +155,43 @@
 
     <html:div class="zws-card">
       <html:h3 class="zws-card-title">MCP 连接</html:h3>
-      <html:div class="zws-form-row zws-top">
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-mcpInterfaceType"
+          data-l10n-id="pref-mcpInterfaceType"
+        ></html:label>
+        <html:select
+          class="zws-select"
+          id="zotero-prefpane-__addonRef__-mcpInterfaceType"
+          preference="mcpInterfaceType"
+        >
+          <html:option value="cloud" data-l10n-id="pref-mcpInterfaceType-cloud"
+            >云端 MCP</html:option
+          >
+          <html:option value="local" data-l10n-id="pref-mcpInterfaceType-local"
+            >本地 MCP（Streamable HTTP）</html:option
+          >
+        </html:select>
+      </html:div>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-mcpAuth"
+          data-l10n-id="pref-mcpAuth"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-mcpAuth"
+          autocomplete="off"
+          spellcheck="false"
+        ></html:input>
+      </html:div>
+      <html:p class="zws-help-text" data-l10n-id="pref-mcpAuth-help"></html:p>
+
+      <html:div class="zws-form-row zws-top" style="margin-top: 16px">
         <html:label
           class="zws-label"
           for="zotero-prefpane-__addonRef__-mcpConfigJson"
@@ -83,7 +202,7 @@
             class="zws-textarea"
             id="zotero-prefpane-__addonRef__-mcpConfigJson"
             preference="mcpConfigJson"
-            rows="8"
+            rows="6"
             style="
               font-family:
                 &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
@@ -94,10 +213,22 @@
             class="zws-help-text"
             data-l10n-id="pref-mcpConfigJson-help"
           ></html:p>
+          <html:div class="zws-mcp-test-row">
+            <html:button
+              type="button"
+              class="zws-btn"
+              id="zotero-prefpane-__addonRef__-mcpTestBtn"
+              data-l10n-id="pref-mcpTest"
+              >验证配置</html:button
+            >
+            <html:span
+              id="zotero-prefpane-__addonRef__-mcpTestResult"
+              class="zws-mcp-test-result"
+            ></html:span>
+          </html:div>
           <html:p
             id="zotero-prefpane-__addonRef__-mcpConfigStatus"
             class="zws-mcp-status fallback"
-            data-l10n-id="pref-mcpConfigJson-status-fallback"
           ></html:p>
         </html:div>
       </html:div>
@@ -331,6 +462,47 @@
         class="zws-help-text"
         data-l10n-id="pref-bodyTemplate-help"
       ></html:p>
+      <html:div
+        class="zws-var-chips"
+        id="zotero-prefpane-__addonRef__-varChips"
+      >
+        <html:button type="button" class="zws-chip" data-var="title"
+          >title</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="authors"
+          >authors</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="yearOrDate"
+          >yearOrDate</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="publicationTitle"
+          >publicationTitle</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="DOI"
+          >DOI</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="url"
+          >url</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="citeKey"
+          >citeKey</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="itemType"
+          >itemType</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="abstractParagraph"
+          >abstractParagraph</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="hasAnnotations"
+          >hasAnnotations</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="hasNotes"
+          >hasNotes</html:button
+        >
+        <html:button type="button" class="zws-chip" data-var="hasTags"
+          >hasTags</html:button
+        >
+      </html:div>
 
       <html:label
         class="zws-preview-label"
@@ -345,13 +517,38 @@
         style="overflow: auto; resize: vertical"
       ></html:textarea>
 
-      <html:label
-        class="zws-preview-label"
-        for="zotero-prefpane-__addonRef__-bodyPreview"
-        data-l10n-id="pref-bodyPreview"
-      ></html:label>
+      <html:div class="zws-view-bar">
+        <html:label
+          class="zws-preview-label"
+          for="zotero-prefpane-__addonRef__-bodyPreview"
+          data-l10n-id="pref-bodyPreview"
+        ></html:label>
+        <html:div
+          class="zws-view-switch"
+          id="zotero-prefpane-__addonRef__-viewSwitch"
+        >
+          <html:button
+            type="button"
+            class="zws-view-btn active"
+            data-view="render"
+            data-l10n-id="pref-previewRender"
+            >渲染预览</html:button
+          >
+          <html:button
+            type="button"
+            class="zws-view-btn"
+            data-view="source"
+            data-l10n-id="pref-previewSource"
+            >源码</html:button
+          >
+        </html:div>
+      </html:div>
+      <html:div
+        class="zws-render-view"
+        id="zotero-prefpane-__addonRef__-bodyPreviewRender"
+      ></html:div>
       <html:textarea
-        class="zws-textarea zws-preview"
+        class="zws-textarea zws-preview zws-hidden"
         id="zotero-prefpane-__addonRef__-bodyPreview"
         rows="10"
         readonly="readonly"
