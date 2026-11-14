@@ -1,5 +1,5 @@
 /**
- * Zotero → WPS 笔记同步引擎。
+ * Zotero → WPS/Craft 笔记同步引擎。
  */
 
 import { WpsMcpClient, McpInterfaceType, NoteOutline } from "./wpsMcpClient";

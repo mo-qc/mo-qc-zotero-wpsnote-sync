@@ -66,7 +66,7 @@ const statusTool: ToolDef = {
   spec: {
     name: "wps_sync_status",
     description:
-      "查询 Zotero → WPS 笔记同步状态：映射条数、轮询开关与间隔、MCP 接口类型。只读。",
+      "查询 Zotero → WPS/Craft 笔记同步状态：映射条数、轮询开关与间隔、MCP 接口类型。只读。",
     inputSchema: { type: "object", properties: {} },
     executionClass: "read",
     workCategory: "external_system",

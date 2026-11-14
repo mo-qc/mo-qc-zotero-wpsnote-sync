@@ -1,4 +1,4 @@
-pref-title = Zotero → WPS 笔记同步设置
+pref-title = Zotero → WPS/Craft 笔记同步设置
 pref-mcpInterfaceType = 接口类型
 pref-mcpInterfaceType-cloud =
     .label = 云端 MCP

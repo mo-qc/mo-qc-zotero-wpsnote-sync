@@ -1,4 +1,4 @@
-# Zotero → WPS 笔记同步
+# Zotero → WPS/Craft 笔记同步
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7%2B-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 
@@ -78,7 +78,7 @@ npm run test:unit
 
 ## 配置说明
 
-在 Zotero 中打开 **编辑 → 首选项 → Zotero → WPS 笔记同步**。
+在 Zotero 中打开 **编辑 → 首选项 → Zotero → WPS/Craft 笔记同步**。
 
 | 首选项            | 说明                                                     |
 | ----------------- | -------------------------------------------------------- |

@@ -47,7 +47,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: Zotero → WPS 笔记同步 ${{ steps.get_version.outputs.version }}
+          name: Zotero → WPS/Craft 笔记同步 ${{ steps.get_version.outputs.version }}
           generate_release_notes: true
           files: |
             .scaffold/build/*.xpi

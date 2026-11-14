@@ -1,4 +1,4 @@
-# Zotero → WPS Notes Sync
+# Zotero → WPS/Craft Notes Sync
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7%2B-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 
@@ -78,7 +78,7 @@ npm run test:unit
 
 ## Configuration
 
-Open **Edit → Preferences → Zotero → WPS Notes Sync** in Zotero.
+Open **Edit → Preferences → Zotero → WPS/Craft Notes Sync** in Zotero.
 
 | Preference            | Description                                                         |
 | --------------------- | ------------------------------------------------------------------- |

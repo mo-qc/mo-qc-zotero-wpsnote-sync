@@ -361,7 +361,7 @@ async function showChangeDialog(changed: ChangedEntry[]): Promise<void> {
     .addButton("稍后处理", "later")
     .setDialogData(dialogData);
 
-  dialog.open("Zotero → WPS 笔记同步", {
+  dialog.open("Zotero → WPS/Craft 笔记同步", {
     width: 480,
     height: 340,
     centerscreen: true,

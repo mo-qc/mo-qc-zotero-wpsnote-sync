@@ -1,4 +1,4 @@
-pref-title = Zotero → WPS Notes Sync Settings
+pref-title = Zotero → WPS/Craft Notes Sync Settings
 pref-mcpInterfaceType = Interface
 pref-mcpInterfaceType-cloud =
     .label = Cloud MCP

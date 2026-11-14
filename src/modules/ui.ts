@@ -1186,7 +1186,7 @@ export async function pullFromWps(itemsArg?: Zotero.Item[]) {
     return { ok: 0, skipped: 0, failed: 0, started: false };
   }
 
-  const popup = new ztoolkit.ProgressWindow("Zotero → WPS 笔记同步");
+  const popup = new ztoolkit.ProgressWindow("Zotero → WPS/Craft 笔记同步");
   if (!beginOperation("pull")) {
     popup.createLine({
       text: "另一同步/回流操作正在进行，请稍后再试",
