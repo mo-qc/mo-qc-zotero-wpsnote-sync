@@ -63,4 +63,25 @@ describe("htmlToWpsXml", function () {
       "<p>line1<br/>line2</p>",
     );
   });
+
+  it("converts pre/code to codeblock with language", function () {
+    const html =
+      '<pre><code class="language-python">print(1)\nprint(2)</code></pre>';
+    expect(htmlToWpsXml(html)).to.equal(
+      '<codeblock lang="python">print(1)\nprint(2)</codeblock>',
+    );
+  });
+
+  it("keeps code newlines and escapes XML special chars via CDATA", function () {
+    const html = '<pre><code class="language-js">if (a &lt; b) {}</code></pre>';
+    expect(htmlToWpsXml(html)).to.equal(
+      '<codeblock lang="js"><![CDATA[if (a < b) {}]]></codeblock>',
+    );
+  });
+
+  it("converts plain pre without language", function () {
+    expect(htmlToWpsXml("<pre>plain code</pre>")).to.equal(
+      "<codeblock>plain code</codeblock>",
+    );
+  });
 });

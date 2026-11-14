@@ -28,6 +28,7 @@ function makeItem(extra: string) {
   let field = extra;
   let saveCount = 0;
   return {
+    key: "TSTKEY",
     getField: (n: string) => (n === "extra" ? field : ""),
     setField: (n: string, v: string) => {
       if (n === "extra") field = v;
@@ -248,6 +249,127 @@ describe("syncEngine core branches", function () {
       } finally {
         Date.now = realNow;
       }
+    });
+  });
+
+  describe("pickWpsSearchMatch / 自写标记", function () {
+    let pickWpsSearchMatch: any;
+    let markSelfSave: any;
+    let isSelfSave: any;
+
+    before(async function () {
+      const mod = await import("../src/modules/syncEngine");
+      pickWpsSearchMatch = (mod as any).pickWpsSearchMatch;
+      markSelfSave = (mod as any).markSelfSave;
+      isSelfSave = (mod as any).isSelfSave;
+    });
+
+    const ref = {
+      templateTitle: "[Zotero] Attention Is All You Need",
+      itemTitle: "Attention Is All You Need",
+      itemKey: "ABCD1234",
+    };
+    const none = () => false;
+
+    it("优先精确匹配模板渲染标题", function () {
+      const cands = [
+        { note_id: "1", title: "[Zotero] Attention Is All You Need and more" },
+        { note_id: "2", title: "[Zotero] Attention Is All You Need" },
+      ];
+      expect(pickWpsSearchMatch(cands, ref, none)?.note_id).to.equal("2");
+    });
+
+    it("次选匹配唯一 item key", function () {
+      const cands = [
+        { note_id: "1", title: "我的阅读笔记 ABCD1234" },
+        { note_id: "2", title: "另一篇也提到 Attention Is All You Need" },
+      ];
+      expect(pickWpsSearchMatch(cands, ref, none)?.note_id).to.equal("1");
+    });
+
+    it("宽松匹配放最后兜底", function () {
+      const cands = [
+        { note_id: "1", title: "[Zotero] attention is all you need" },
+      ];
+      expect(pickWpsSearchMatch(cands, ref, none)?.note_id).to.equal("1");
+    });
+
+    it("已归属其他条目的笔记不接管（防同名共写）", function () {
+      const owned = (id?: string) => id === "1";
+      const cands = [
+        { note_id: "1", title: "[Zotero] Attention Is All You Need" },
+        { note_id: "2", title: "无关笔记" },
+      ];
+      expect(pickWpsSearchMatch(cands, ref, owned)?.note_id).to.equal(
+        undefined,
+      );
+    });
+
+    it("被接管过滤后可回退到下一优先级候选", function () {
+      const owned = (id?: string) => id === "1";
+      const cands = [
+        { note_id: "1", title: "[Zotero] Attention Is All You Need" },
+        { note_id: "2", title: "含 key ABCD1234 的旧笔记" },
+      ];
+      expect(pickWpsSearchMatch(cands, ref, owned)?.note_id).to.equal("2");
+    });
+
+    it("大小写与首尾空白不敏感", function () {
+      const cands = [
+        { note_id: "1", title: "  [zotero] ATTENTION IS ALL YOU NEED  " },
+      ];
+      expect(pickWpsSearchMatch(cands, ref, none)?.note_id).to.equal("1");
+    });
+
+    it("空候选/空标题返回 undefined", function () {
+      expect(pickWpsSearchMatch([], ref, none)).to.equal(undefined);
+      expect(
+        pickWpsSearchMatch(
+          [{ note_id: "1", title: "x" }],
+          { templateTitle: "", itemTitle: "", itemKey: "K" },
+          none,
+        ),
+      ).to.equal(undefined);
+    });
+
+    describe("isSelfSave 窗口", function () {
+      it("标记后窗口期内判定为自写", function () {
+        markSelfSave("KEYSELF1");
+        expect(isSelfSave("KEYSELF1")).to.equal(true);
+      });
+
+      it("未标记的 key 判定为否", function () {
+        expect(isSelfSave("KEYOTHER")).to.equal(false);
+      });
+
+      it("窗口过期（>10s）后判定为否并清除记录", function () {
+        markSelfSave("KEYEXPIRE");
+        expect(isSelfSave("KEYEXPIRE")).to.equal(true);
+        const realNow = Date.now;
+        try {
+          // 快进 11 秒越过 10s 窗口
+          Date.now = () => realNow() + 11_000;
+          expect(isSelfSave("KEYEXPIRE")).to.equal(false);
+        } finally {
+          Date.now = realNow;
+        }
+        // 记录已清除：恢复真实时间后仍为否
+        expect(isSelfSave("KEYEXPIRE")).to.equal(false);
+      });
+
+      it("超过 1000 条上限时淘汰最早的 key", function () {
+        // 插入 1005 个全新 key：无论此前集合里有多少条目，
+        // 超出上限 1000 的部分都应按插入序淘汰最早的
+        for (let i = 0; i < 1005; i += 1) {
+          markSelfSave(`KEYCAP${i}`);
+        }
+        // 最早的 5 个被淘汰（仍在 10s 窗口内，只能是上限淘汰）
+        expect(isSelfSave("KEYCAP0")).to.equal(false);
+        expect(isSelfSave("KEYCAP4")).to.equal(false);
+        // 边界之后的 key 保留
+        expect(isSelfSave("KEYCAP5")).to.equal(true);
+        expect(isSelfSave("KEYCAP1004")).to.equal(true);
+      });
     });
   });
 });
