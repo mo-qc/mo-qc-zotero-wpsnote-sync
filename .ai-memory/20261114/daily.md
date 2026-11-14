@@ -36,8 +36,8 @@
 2. WPS 标题搜索兜底无归属校验（syncEngine.ts）：新纯函数 `pickWpsSearchMatch`，匹配优先级=精确模板标题>含唯一 itemKey>宽松包含文献标题，每级过滤已映射给其他条目的候选（对齐 Craft 侧既有校验）。8 个单测覆盖
 3. 自身 extra 写入触发第二轮全量同步（syncEngine/craftSync/hooks）：新增 `markSelfSave/isSelfSave`（10s 窗口，Map 上限 1000），writeNoteIdToExtra/clearNoteIdFromExtra/writeCraftDocIdToExtra/clearCraftDocIdFromExtra 在 saveTx 前标记，hooks.onNotify 过滤
 4. Craft 先插后删的滞留（craftSync.ts）：删除失败后同轮重取子块复核（滞留=失败批次∩仍存在块）重删一次，仍滞留抛 DELETE_LEFTOVER 判本轮失败（不写 lastSuccess，下次同步完整流程自愈）
-5. 回流图片全灭（wpsMcpClient/ui.ts）：根因是 read_image 的 base64 在 MCP 原生 image content 项里，parseToolResult 只认 text 把它丢了——现在保留 __mcpContent，readImage 优先读 image 项；回填改为按 read_note 的 `<img id>` 逐块对应（不再按 outline 顺序错位），同块去重，无 id 时退回 outline 按序。E2E：探针笔记插图→pull→子笔记含 data:image/png;base64 且复用既有子笔记
+5. 回流图片全灭（wpsMcpClient/ui.ts）：根因是 read_image 的 base64 在 MCP 原生 image content 项里，parseToolResult 只认 text 把它丢了——现在保留 \_\_mcpContent，readImage 优先读 image 项；回填改为按 read_note 的 `<img id>` 逐块对应（不再按 outline 顺序错位），同块去重，无 id 时退回 outline 按序。E2E：探针笔记插图→pull→子笔记含 data:image/png;base64 且复用既有子笔记
 
 - 验证: tsc=0 / eslint+prettier=0 / 116 单测通过（+9）/ 构建成功 / 新 XPI 已装并重载 / 错误台仅剩 zoterostyle 无关报错
-- 清理: 探针笔记（含图片）已删、临时映射与 extra 已还原为 586551322554、_zws_probe2 标签已移除、探针回流子笔记已删除
+- 清理: 探针笔记（含图片）已删、临时映射与 extra 已还原为 586551322554、\_zws_probe2 标签已移除、探针回流子笔记已删除
 - 未验证披露: 修复 1/3/4 的完整自动同步链路只做了关键路径 E2E（远端冲突跳过）与单测，长窗口时序（10s 窗口外真实用户编辑、批量并发下 Craft 滞留重删）未做自动化覆盖
