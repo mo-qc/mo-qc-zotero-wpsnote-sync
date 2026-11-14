@@ -198,8 +198,17 @@ const pullTool: ToolDef = {
   execute: async (input: { itemKeys: string[] }) => {
     const { items, missing } = resolveItemsByKey(input.itemKeys);
     if (!items.length) return { pulled: 0, missing };
-    await pullFromWps(items);
-    return { pulled: items.length, missing };
+    // 透传真实统计：锁被占用/条目失败时不能虚报 pulled=items.length
+    const stat = await pullFromWps(items);
+    if (stat && stat.started === false) {
+      throw new Error("Another sync/pull operation is in progress");
+    }
+    return {
+      pulled: stat?.ok ?? 0,
+      skipped: stat?.skipped ?? 0,
+      failed: stat?.failed ?? 0,
+      missing,
+    };
   },
 };
 

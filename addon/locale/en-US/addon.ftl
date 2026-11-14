@@ -4,6 +4,7 @@ prefs-source = Source Code
 menu-sync-to-wpsnote = Sync to WPS Notes
 menu-force-sync-to-wpsnote = Force Sync to WPS Notes
 menu-pull-from-wpsnote = Pull Note from WPS (Back to Zotero)
+menu-pull-from-craft = Pull Document from Craft (Back to Zotero)
 menu-sync-collection-to-wpsnote = Sync Collection to WPS Notes
 menu-force-sync-collection-to-wpsnote = Force Sync Collection to WPS Notes
 menu-sync-history = WPS Sync History

@@ -7,6 +7,7 @@ import {
   runSync,
   openSyncHistory,
   pullFromWps,
+  pullFromCraft,
 } from "./modules/ui";
 import {
   syncSelectedItems,
@@ -14,6 +15,9 @@ import {
   getClient,
   beginOperation,
   endOperation,
+  isSelfSave,
+  type ConflictKind,
+  type ConflictResolution,
 } from "./modules/syncEngine";
 import {
   startChangePoller,
@@ -67,6 +71,7 @@ async function onStartup() {
   (addon.api as any).syncSelectedItems = syncSelectedItems;
   (addon.api as any).openSyncHistory = openSyncHistory;
   (addon.api as any).pullFromWps = pullFromWps;
+  (addon.api as any).pullFromCraft = pullFromCraft;
   (addon.api as any).updateNoteModified = updateNoteModified;
   (addon.api as any).readNote = (noteId: string) =>
     getClient().readNote(noteId);
@@ -221,6 +226,40 @@ function getItemTags(item: Zotero.Item): string[] {
     : [];
 }
 
+/**
+ * 自动同步的冲突策略：无人在场，宁可跳过不可覆盖。
+ *
+ * - kind = "item"（Zotero 侧变更）：这正是本次自动同步要推送的内容，直接覆盖远端；
+ * - kind = "wps"/"craft"（远端被手改）：自动同步时无法弹窗征询，跳过本次并把
+ *   远端改动留在原地，弹提醒由用户手动处理（手动同步/回流）。
+ * 不受 promptOnConflict 偏好影响：手动同步关掉提示是用户在场时的授权，
+ * 自动同步无人在场，静默覆盖的代价比多弹一条提醒高。
+ */
+export function autoSyncConflictPolicy(
+  kind: ConflictKind | undefined,
+  title: string,
+): ConflictResolution {
+  if (!kind || kind === "item") return "overwrite";
+  notifyAutoSyncRemoteConflict(kind, title);
+  return "skip";
+}
+
+function notifyAutoSyncRemoteConflict(kind: ConflictKind, title: string) {
+  try {
+    const target = kind === "craft" ? "Craft" : "WPS";
+    new ztoolkit.ProgressWindow(addon.data.config.addonName, {
+      closeTime: 8000,
+    })
+      .createLine({
+        text: `检测到 ${target} 端有手改，自动同步已跳过（请手动同步或回流）：${title.slice(0, 40)}`,
+        type: "warning",
+      })
+      .show();
+  } catch (e) {
+    ztoolkit.log("Auto-sync conflict notify failed", e);
+  }
+}
+
 function scheduleAutoSync(item: Zotero.Item, delay = 2000): void {
   const itemKey = item.key;
   const existing = autoSyncTimers.get(itemKey);
@@ -245,6 +284,10 @@ function scheduleAutoSync(item: Zotero.Item, delay = 2000): void {
         // 修改事件即变更信号：子笔记/批注修改不 bump 父条目 dateModified，
         // 走增量会被误判"未变更"而跳过，导致 AI/手动改的内容推不到 WPS
         incrementalSync: false,
+        // 无人在场：条目自身变更是推送意图（覆盖），远端手改一律跳过并提醒
+        promptOnConflict: true,
+        onConflict: (_item, title, _mapping, kind) =>
+          Promise.resolve(autoSyncConflictPolicy(kind, title)),
       });
     } catch (e: any) {
       ztoolkit.log("Auto-sync failed", item.key, e?.message || String(e));
@@ -282,6 +325,10 @@ async function onNotify(
 
     const itemKey = item.key;
     if (syncingItems.has(itemKey)) continue;
+
+    // 插件自己写 extra 冗余触发的 modify：跳过，避免每次同步后再
+    // 白白多跑一轮全量同步（内容未变，纯双倍请求）
+    if (isSelfSave(itemKey)) continue;
 
     const tags = getItemTags(item);
     const shouldSyncByTag = autoSyncTag && tags.includes(autoSyncTag);

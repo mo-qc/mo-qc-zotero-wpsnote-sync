@@ -33,6 +33,13 @@ declare namespace _ZoteroTypes {
       "changePollInterval": number;
       "mcpServerWriteEnabled": boolean;
       "mcpServerToken": string;
+      "syncTarget": string;
+      "craftApiLink": string;
+      "craftApiToken": string;
+      "craftFolderId": string;
+      "colorSemanticMap": string;
+      "readingPreset": string;
+      "craftArchiveByTag": boolean;
     };
   }
 }

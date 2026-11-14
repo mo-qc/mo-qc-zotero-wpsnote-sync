@@ -48,9 +48,10 @@
     { border-color: #94a3b8; } .zws-input:focus, .zws-select:focus,
     .zws-textarea:focus { border-color: var(--zws-primary); box-shadow: 0 0 0
     3px var(--zws-primary-ring); } .zws-textarea { width: 100%; resize:
-    vertical; line-height: 1.6; } .zws-checkbox-grid { display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
-    .zws-checkbox-row { display: flex; align-items: center; gap:
+    vertical; line-height: 1.6; } .zws-menulist { flex: 1; min-width: 0;
+    font-family: var(--zws-font); font-size: 13px; } .zws-checkbox-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px
+    24px; } .zws-checkbox-row { display: flex; align-items: center; gap:
     var(--zws-gap-sm); font-size: 13px; color: var(--zws-text-secondary);
     cursor: pointer; user-select: none; } .zws-checkbox-row
     input[type="checkbox"] { width: 16px; height: 16px; accent-color:
@@ -159,6 +160,86 @@
     </html:div>
 
     <html:div class="zws-card">
+      <html:h3 class="zws-card-title">同步目标</html:h3>
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-syncTarget"
+          data-l10n-id="pref-syncTarget"
+        ></html:label>
+        <menulist
+          class="zws-menulist"
+          id="zotero-prefpane-__addonRef__-syncTarget"
+          preference="syncTarget"
+          native="true"
+        >
+          <menupopup>
+            <menuitem data-l10n-id="pref-syncTarget-wps" value="wps" />
+            <menuitem data-l10n-id="pref-syncTarget-craft" value="craft" />
+          </menupopup>
+        </menulist>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-syncTarget-help"
+      ></html:p>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">阅读体验</html:h3>
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-readingPreset"
+          data-l10n-id="pref-readingPreset"
+        ></html:label>
+        <menulist
+          class="zws-menulist"
+          id="zotero-prefpane-__addonRef__-readingPreset"
+          preference="readingPreset"
+          native="true"
+        >
+          <menupopup>
+            <menuitem data-l10n-id="pref-readingPreset-full" value="full" />
+            <menuitem data-l10n-id="pref-readingPreset-quick" value="quick" />
+            <menuitem
+              data-l10n-id="pref-readingPreset-archive"
+              value="archive"
+            />
+          </menupopup>
+        </menulist>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-readingPreset-help"
+      ></html:p>
+      <html:div class="zws-form-row zws-top">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-colorSemanticMap"
+          data-l10n-id="pref-colorSemanticMap"
+        ></html:label>
+        <html:div style="flex: 1; min-width: 0">
+          <html:textarea
+            class="zws-textarea"
+            id="zotero-prefpane-__addonRef__-colorSemanticMap"
+            preference="colorSemanticMap"
+            rows="4"
+            style="
+              font-family:
+                &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
+                &quot;Roboto Mono&quot;, Consolas, monospace;
+            "
+          ></html:textarea>
+        </html:div>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-colorSemanticMap-help"
+      ></html:p>
+    </html:div>
+
+    <html:div class="zws-card">
       <html:h3 class="zws-card-title">MCP 连接</html:h3>
       <html:div class="zws-form-row">
         <html:label
@@ -166,18 +247,23 @@
           for="zotero-prefpane-__addonRef__-mcpInterfaceType"
           data-l10n-id="pref-mcpInterfaceType"
         ></html:label>
-        <html:select
-          class="zws-select"
+        <menulist
+          class="zws-menulist"
           id="zotero-prefpane-__addonRef__-mcpInterfaceType"
           preference="mcpInterfaceType"
+          native="true"
         >
-          <html:option value="cloud" data-l10n-id="pref-mcpInterfaceType-cloud"
-            >云端 MCP</html:option
-          >
-          <html:option value="local" data-l10n-id="pref-mcpInterfaceType-local"
-            >本地 MCP（Streamable HTTP）</html:option
-          >
-        </html:select>
+          <menupopup>
+            <menuitem
+              data-l10n-id="pref-mcpInterfaceType-cloud"
+              value="cloud"
+            />
+            <menuitem
+              data-l10n-id="pref-mcpInterfaceType-local"
+              value="local"
+            />
+          </menupopup>
+        </menulist>
       </html:div>
 
       <html:div class="zws-form-row">
@@ -236,6 +322,96 @@
             class="zws-mcp-status fallback"
           ></html:p>
         </html:div>
+      </html:div>
+    </html:div>
+
+    <html:div class="zws-card">
+      <html:h3 class="zws-card-title">Craft 连接</html:h3>
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-craftApiLink"
+          data-l10n-id="pref-craftApiLink"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-craftApiLink"
+          preference="craftApiLink"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="https://connect.craft.do/links/{linkId}/api/v1"
+        ></html:input>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-craftApiLink-help"
+      ></html:p>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-craftApiToken"
+          data-l10n-id="pref-craftApiToken"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-craftApiToken"
+          autocomplete="off"
+          spellcheck="false"
+        ></html:input>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-craftApiToken-help"
+      ></html:p>
+
+      <html:div class="zws-form-row">
+        <html:label
+          class="zws-label"
+          for="zotero-prefpane-__addonRef__-craftFolderId"
+          data-l10n-id="pref-craftFolderId"
+        ></html:label>
+        <html:input
+          class="zws-input"
+          type="text"
+          id="zotero-prefpane-__addonRef__-craftFolderId"
+          preference="craftFolderId"
+          autocomplete="off"
+          spellcheck="false"
+        ></html:input>
+      </html:div>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-craftFolderId-help"
+      ></html:p>
+
+      <label class="zws-checkbox-row" style="margin-top: 4px">
+        <html:input
+          type="checkbox"
+          id="zotero-prefpane-__addonRef__-craftArchiveByTag"
+          preference="craftArchiveByTag"
+        ></html:input>
+        <span data-l10n-id="pref-craftArchiveByTag"></span>
+      </label>
+      <html:p
+        class="zws-help-text"
+        data-l10n-id="pref-craftArchiveByTag-help"
+      ></html:p>
+
+      <html:div class="zws-mcp-test-row" style="margin-top: 12px">
+        <html:button
+          type="button"
+          class="zws-btn"
+          id="zotero-prefpane-__addonRef__-craftTestBtn"
+          data-l10n-id="pref-craftTest"
+          >测试连接</html:button
+        >
+        <html:span
+          id="zotero-prefpane-__addonRef__-craftTestResult"
+          class="zws-mcp-test-result"
+        ></html:span>
       </html:div>
     </html:div>
 
@@ -491,10 +667,7 @@
           placeholder="留空则不校验"
         ></html:input>
       </html:div>
-      <html:p
-        class="zws-help-text"
-        data-l10n-id="pref-mcpServer-help"
-      ></html:p>
+      <html:p class="zws-help-text" data-l10n-id="pref-mcpServer-help"></html:p>
     </html:div>
 
     <html:div class="zws-card">

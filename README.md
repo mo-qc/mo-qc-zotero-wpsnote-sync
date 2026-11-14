@@ -10,8 +10,8 @@ A Zotero 7+ plugin (verified on Zotero 10) that syncs literature items, notes, P
 
 - **Manual & auto sync**: Sync selected items from the right-click menu, or auto-sync when a configurable tag is added.
 - **Rich content**: Syncs metadata, abstract, attachments, PDF annotations, child notes, and tags.
-- **Markdown support**: Annotations and notes are converted to WPS-compatible XML, including bold, italic, links, tables, lists, checklists, inline/block LaTeX, and inline code.
-- **Local images**: Local attachment images are embedded as base64 data URIs when syncing notes.
+- **Markdown support**: Annotations and notes are converted to WPS-compatible XML, including bold, italic, links, tables, nested lists (with `listLevel`), checklists, fenced code blocks (with language), blockquotes, inline/block LaTeX, and inline code.
+- **Local images**: Local attachment images are embedded as base64 data URIs when syncing notes; pulling a note back from WPS fetches image blocks via `read_image` and writes them as data URIs.
 - **Incremental sync**: Skips unchanged items by tracking Zotero modification times.
 - **Conflict resolution**: Prompts to overwrite, skip, or create a copy when a synced item has changed.
 - **Deduplication**: Updates existing WPS notes via a local item-key → note-id mapping, with mapping-failure detection and rebuild.
@@ -80,23 +80,23 @@ npm run test:unit
 
 Open **Edit → Preferences → Zotero → WPS Notes Sync** in Zotero.
 
-| Preference            | Description                                                   |
-| --------------------- | ------------------------------------------------------------- |
-| MCP Endpoint          | WPS MCP endpoint, e.g. `https://ainote.kdocs.cn/mcp-svc/mcp`  |
-| API Key               | Your WPS MCP API key                                          |
-| Interface             | Cloud MCP or local streamable_http                            |
-| Default Tags          | Tags to add to every synced note                              |
-| Update existing notes | Update existing WPS notes instead of creating duplicates      |
-| Incremental sync      | Skip items that have not changed since last sync              |
-| Prompt on conflict    | Ask how to handle changed items                               |
-| Sync content switches | Include abstract, attachments, annotations, tags, child notes |
-| Auto-sync tag         | Automatically sync items when this tag is added               |
-| Auto-sync on modify   | Re-sync an item a few seconds after metadata/annotation edits |
-| Sync concurrency      | Parallel workers for batch sync (recommended 1–5)             |
-| WPS change poller     | Periodically check synced notes for WPS-side edits and prompt |
+| Preference            | Description                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| MCP Endpoint          | WPS MCP endpoint, e.g. `https://ainote.kdocs.cn/mcp-svc/mcp`        |
+| API Key               | Your WPS MCP API key                                                |
+| Interface             | Cloud MCP or local streamable_http                                  |
+| Default Tags          | Tags to add to every synced note                                    |
+| Update existing notes | Update existing WPS notes instead of creating duplicates            |
+| Incremental sync      | Skip items that have not changed since last sync                    |
+| Prompt on conflict    | Ask how to handle changed items                                     |
+| Sync content switches | Include abstract, attachments, annotations, tags, child notes       |
+| Auto-sync tag         | Automatically sync items when this tag is added                     |
+| Auto-sync on modify   | Re-sync an item a few seconds after metadata/annotation edits       |
+| Sync concurrency      | Parallel workers for batch sync (recommended 1–5)                   |
+| WPS change poller     | Periodically check synced notes for WPS-side edits and prompt       |
 | MCP Server write      | Allow external MCP clients to call sync/pull tools (off by default) |
-| MCP Server token      | Optional access token required from MCP clients               |
-| Title/Body templates  | Customize output using the template syntax below              |
+| MCP Server token      | Optional access token required from MCP clients                     |
+| Title/Body templates  | Customize output using the template syntax below                    |
 
 ### Template Syntax
 

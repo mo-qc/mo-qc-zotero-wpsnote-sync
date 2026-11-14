@@ -8,9 +8,13 @@ import {
   setApiKey,
   getLocalMcpToken,
   setLocalMcpToken,
+  getCraftApiToken,
+  setCraftApiToken,
+  getCraftConfig,
   setPref,
 } from "../utils/prefs";
 import { WpsMcpClient } from "./wpsMcpClient";
+import { CraftClient } from "./craftClient";
 import { restartChangePoller } from "./changePoller";
 import { renderSemanticXml } from "../utils/semanticRender";
 import { extractItemData } from "./zoteroItem";
@@ -139,9 +143,10 @@ function bindPrefEvents() {
   const mcpConfigStatus = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-mcpConfigStatus`,
   ) as HTMLParagraphElement | null;
+  // macOS 原生 menulist 选完可能只发 command 不发 change，两个都听
   const mcpInterfaceSelect = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-mcpInterfaceType`,
-  ) as HTMLSelectElement | null;
+  ) as HTMLElement | null;
   const mcpAuthInput = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-mcpAuth`,
   ) as HTMLInputElement | null;
@@ -228,8 +233,12 @@ function bindPrefEvents() {
   });
 
   // MCP 简单配置：接口类型 + 单密钥输入
+  // menulist 与 select 都暴露 value 属性（XUL menulist 的 value = 选中项 value）
   const currentInterface = (): "cloud" | "local" =>
-    mcpInterfaceSelect?.value === "local" ? "local" : "cloud";
+    (mcpInterfaceSelect as unknown as { value?: string } | null)?.value ===
+    "local"
+      ? "local"
+      : "cloud";
   const loadAuthValue = () => {
     if (!mcpAuthInput) return;
     mcpAuthInput.value =
@@ -245,10 +254,12 @@ function bindPrefEvents() {
   // preference 属性回填 textarea 是异步的，回填后再刷一次状态
   setTimeout(refreshMcpStatus, 200);
 
-  mcpInterfaceSelect?.addEventListener("change", () => {
+  const onInterfaceChange = () => {
     loadAuthValue();
     refreshMcpStatus();
-  });
+  };
+  mcpInterfaceSelect?.addEventListener("change", onInterfaceChange);
+  mcpInterfaceSelect?.addEventListener("command", onInterfaceChange);
   // 改动轮询开关变更后立即重启轮询（关→开即时生效）
   doc
     .getElementById(`zotero-prefpane-${config.addonRef}-changePollEnabled`)
@@ -336,6 +347,70 @@ function bindPrefEvents() {
       } finally {
         mcpTestBtn.disabled = false;
         mcpTestBtn.textContent = btnLabel;
+      }
+    });
+  }
+
+  // Craft 连接：token 加密存储（打字防抖 + change 双保险）+ 连接测试
+  const craftTokenInput = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-craftApiToken`,
+  ) as HTMLInputElement | null;
+  const craftTestBtn = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-craftTestBtn`,
+  ) as HTMLButtonElement | null;
+  const craftTestResult = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-craftTestResult`,
+  ) as HTMLSpanElement | null;
+  if (craftTokenInput) {
+    craftTokenInput.value = getCraftApiToken();
+    let craftSaveTimer: ReturnType<typeof setTimeout> | undefined;
+    const saveCraftToken = () => {
+      const v = craftTokenInput.value.trim();
+      if (v !== getCraftApiToken()) setCraftApiToken(v);
+    };
+    craftTokenInput.addEventListener("input", () => {
+      if (craftSaveTimer) clearTimeout(craftSaveTimer);
+      craftSaveTimer = setTimeout(saveCraftToken, 300);
+    });
+    craftTokenInput.addEventListener("change", () => {
+      if (craftSaveTimer) clearTimeout(craftSaveTimer);
+      saveCraftToken();
+    });
+  }
+  if (craftTestBtn && craftTestResult) {
+    const craftBtnLabel = craftTestBtn.textContent || "测试连接";
+    craftTestBtn.addEventListener("click", async () => {
+      const v = craftTokenInput?.value.trim() || "";
+      if (v && v !== getCraftApiToken()) setCraftApiToken(v);
+      const cfg = getCraftConfig();
+      if (!cfg.link || !cfg.token) {
+        craftTestResult.className = "zws-mcp-test-result error";
+        craftTestResult.textContent = "请先填写 API Link 与 Token。";
+        return;
+      }
+      craftTestBtn.disabled = true;
+      craftTestBtn.textContent = "测试中…";
+      craftTestResult.className = "zws-mcp-test-result pending";
+      craftTestResult.textContent = "正在连接 Craft…";
+      try {
+        const client = new CraftClient({
+          link: cfg.link,
+          token: cfg.token,
+          timeoutMs: 15000,
+        });
+        const info = await client.connection();
+        craftTestResult.className = "zws-mcp-test-result ok";
+        craftTestResult.textContent = `连接成功：${
+          info.space?.name || info.space?.id || "已连接"
+        }`;
+      } catch (e) {
+        craftTestResult.className = "zws-mcp-test-result error";
+        craftTestResult.textContent = `连接失败：${
+          e instanceof Error ? e.message : String(e)
+        }`;
+      } finally {
+        craftTestBtn.disabled = false;
+        craftTestBtn.textContent = craftBtnLabel;
       }
     });
   }

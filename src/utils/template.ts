@@ -20,6 +20,7 @@ import type {
 import { escapeXml, paragraph, link } from "./xmlHelpers";
 import { markdownToWpsXml, splitMarkdownByTable } from "./markdown";
 import { htmlToWpsXml } from "./htmlToWps";
+import { getPref, getColorSemanticMap } from "./prefs";
 
 export { getDefaultTitleTemplate, getDefaultBodyTemplate };
 
@@ -40,6 +41,8 @@ function enrichAnnotation(a: ZoteroAnnotation) {
     hasText: !!a.text,
     hasComment: !!a.comment,
     hasImage: a.type === "image" && !!a.imageAttachmentKey,
+    // caption 灰字内嵌的原文：转义 markdown 记号，防止原文被二次解析
+    textMd: a.text ? a.text.replace(/([\\`*_~[\]])/g, "\\$1") : "",
     pageIndex:
       a.position?.pageIndex !== undefined
         ? String(a.position.pageIndex + 1)
@@ -153,14 +156,21 @@ function groupAnnotationsByPage(
 function groupAnnotationsByColor(
   annotations: ZoteroAnnotation[],
 ): { color: string; colorName: string; items: ZoteroAnnotation[] }[] {
-  // 按颜色名归并：同名色（如多个绿色变体）合成一组，避免重复标题
+  // 分组名：用户颜色语义映射优先（colorSemanticMap），回落默认色名；
+  // 按分组名归并——映射可把多个同义色变体合成一组（如多个绿色 → "核心结论"）
+  const semantic = getColorSemanticMap();
+  const nameOf = (hex?: string): string =>
+    semantic[
+      String(hex || "")
+        .trim()
+        .toLowerCase()
+    ] || annotationColorName(hex);
   const groups = new Map<
     string,
     { color: string; items: ZoteroAnnotation[] }
   >();
   for (const ann of annotations) {
-    const colorName = annotationColorName(ann.color);
-    const key = colorName || ann.color || "default";
+    const key = nameOf(ann.color) || ann.color || "default";
     const entry = groups.get(key) || {
       color: ann.color || "#ffd400",
       items: [],
@@ -170,7 +180,7 @@ function groupAnnotationsByColor(
   }
   return Array.from(groups.entries()).map(([key, entry]) => ({
     color: entry.color,
-    colorName: annotationColorName(entry.color),
+    colorName: key === "default" ? "" : key,
     items: entry.items,
   }));
 }
@@ -274,14 +284,24 @@ function parseTemplate(tokens: TemplateNode[]): TemplateNode[] {
     currentNodes().push(token);
   }
 
+  // 关闭块时取父 frame 的"当前"末尾节点：必须考虑父 frame 是否处于
+  // else 分支——嵌套块若 push 在 elseNodes 里，从 nodes 取会挂错节点，
+  // 导致嵌套块 children 丢失（else 分支内的 {{#if}} 内容被静默吞掉）
+  function parentLastNode(): TemplateNode | undefined {
+    const parent = stack[stack.length - 1];
+    const nodes = parent.inElse
+      ? parent.elseNodes || parent.nodes
+      : parent.nodes;
+    return nodes[nodes.length - 1];
+  }
+
   for (const token of tokens) {
     if (token.type === "text" && token.value === "{{/each}}") {
       const frame = stack.pop();
       if (!frame || frame.type !== "each") {
         throw new Error("Unexpected {{/each}}");
       }
-      const block =
-        stack[stack.length - 1].nodes[stack[stack.length - 1].nodes.length - 1];
+      const block = parentLastNode();
       if (block && block.type === "each") {
         block.children = frame.nodes;
       }
@@ -300,8 +320,7 @@ function parseTemplate(tokens: TemplateNode[]): TemplateNode[] {
       if (!frame || frame.type !== "if") {
         throw new Error(`Unexpected ${token.value}`);
       }
-      const block =
-        stack[stack.length - 1].nodes[stack[stack.length - 1].nodes.length - 1];
+      const block = parentLastNode();
       if (block && (block.type === "if" || block.type === "unless")) {
         block.children = frame.nodes;
         if (frame.elseNodes) {
@@ -411,16 +430,58 @@ export function renderItemTemplate(
     urlLink: item.url ? link(item.url, item.url) : "",
     abstractParagraph: item.abstract ? paragraph(item.abstract) : "",
     tagsJoined: item.tags.join(" · "),
-    annotations: item.annotations.map((a) => enrichAnnotation(a)),
+    // 文档头标签行：复用 tagToXml 规范化（Zotero 标签名可能自带 #，防双井号）
+    tagsXmlDoc: item.tags.map((t) => tagToXml(t)).join(" "),
+    annotations: item.annotations.map((a, i) => ({
+      ...enrichAnnotation(a),
+      seq: i + 1,
+    })),
+    annotationCount: item.annotations.length,
+    noteCount: item.notes.length,
     annotationGroups: groupAnnotationsByPage(item.annotations).map((g) => ({
       pageLabel: g.pageLabel,
-      items: g.items.map((a) => enrichAnnotation(a)),
+      items: g.items.map((a) => ({
+        ...enrichAnnotation(a),
+        seq: item.annotations.indexOf(a) + 1,
+      })),
     })),
     annotationGroupsByColor: groupAnnotationsByColor(item.annotations).map(
       (g) => ({
         color: g.color,
         colorName: g.colorName,
-        items: g.items.map((a) => enrichAnnotation(a)),
+        count: g.items.length,
+        items: g.items.map((a) => {
+          const seq = item.annotations.indexOf(a) + 1;
+          const ea = enrichAnnotation(a);
+          // 相邻批注交替色：批注正文色底 + 无批注卡元信息条同色轮换，
+          // Craft callout 不可调色，用行内 highlight 色块切分长串
+          const altColor = seq % 2 === 1 ? "mint" : "yellow";
+          return {
+            ...ea,
+            seq,
+            altColor,
+            bgAlpha: seq % 2 === 1 ? "1F" : "33",
+            commentBeforeTableXml: ea.commentBeforeTableXml
+              ? // 段内已有 fontHighlightColor 时跳过包色底（highlight 不能嵌套，
+                // 嵌套会被 Craft 400 拒绝导致整篇同步失败）
+                ea.commentBeforeTableXml
+                  .split(/(<p>)/)
+                  .map((seg) =>
+                    seg === "<p>" || !seg.startsWith("<p>")
+                      ? seg
+                      : seg.includes("fontHighlightColor")
+                        ? seg
+                        : seg
+                            .replace(
+                              /<p>/,
+                              `<p><span fontHighlightColor="${altColor}">`,
+                            )
+                            .replace(/<\/p>/, "</span></p>"),
+                  )
+                  .join("")
+              : "",
+          };
+        }),
       }),
     ),
   };
@@ -438,115 +499,165 @@ export function renderItemTemplate(
 
 const DEFAULT_TITLE_TEMPLATE = "[Zotero] {{title}}";
 
-const DEFAULT_BODY_TEMPLATE_EN = `<h1>{{title}}</h1>
-<columns>
-<column columnBackgroundColor="#FAF1E6">
-{{#if authors}}<p><strong>Author(s)</strong> {{authors}}</p>{{/if}}
-{{#if publicationTitle}}<p><strong>Source</strong> {{publicationTitle}}</p>{{/if}}
-{{#if yearOrDate}}<p><strong>Year</strong> {{yearOrDate}}</p>{{/if}}
-{{#if itemType}}<p><strong>Type</strong> {{itemType}}</p>{{/if}}
-</column>
-<column columnBackgroundColor="#EBF2FF">
-{{#if hasDOI}}<p><strong>DOI</strong> {{{doiLink}}}</p>{{/if}}
-{{#if hasURL}}<p><strong>URL</strong> {{{urlLink}}}</p>{{/if}}
-{{#if citeKey}}<p><strong>BibTeX</strong> {{citeKey}}</p>{{/if}}
-<p><strong>Zotero</strong> {{itemKey}}</p>
-</column>
-</columns>
-{{#if hasAbstract}}
-<h2>Abstract</h2>
-<highlightBlock emoji="📄" highlightBlockBackgroundColor="#F6F9FC" highlightBlockBorderColor="#D6E4F0">
-{{{abstractParagraph}}}
-</highlightBlock>
-{{/if}}
-{{#if hasAttachments}}
-<h2>Attachments</h2>
-{{#each attachments}}
-<p>📄 {{title}}{{#if isPDF}} (PDF stored locally in Zotero){{/if}}</p>
-{{/each}}
-{{/if}}
-{{#if hasAnnotations}}
-<h2>Annotations</h2>
-{{#each annotationGroupsByColor}}
-{{#if colorName}}<h3>{{colorName}}</h3>{{/if}}
-{{#each items}}
-<highlightBlock emoji="📝" highlightBlockBackgroundColor="{{color}}26" highlightBlockBorderColor="{{color}}">
-<p><strong>[{{typeLabel}}]</strong></p>
-{{{textParagraph}}}
-{{#if comment}}<p><strong>Comment</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
-{{#if tags}}<p><strong>Tags:</strong> {{{tagsXml}}}</p>{{/if}}
-</highlightBlock>
-{{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
-{{/each}}
-{{/each}}
-{{/if}}
-{{#if hasNotes}}
-<h2>Notes</h2>
+// —— 阅读预设共享片段（EN）——
+const META_HEAD_EN = `<h1>{{title}}</h1>
+<blockquote>{{#if authors}}<strong>Authors</strong> {{authors}}
+{{/if}}{{#if publicationTitle}}<strong>Journal</strong> {{publicationTitle}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}
+{{/if}}{{#if yearOrDate}}{{#unless publicationTitle}}<strong>Date</strong> {{yearOrDate}}
+{{/unless}}{{/if}}📝 {{annotationCount}} annotations · 📄 {{noteCount}} notes</blockquote>
+{{#if hasTags}}<p>{{{tagsXmlDoc}}}</p>{{/if}}`;
+
+const NOTES_EN = `{{#if hasNotes}}
+<h2>✏️ My Notes</h2>
 {{#each notes}}
 {{#if title}}<h3>{{title}}</h3>{{/if}}
 {{{contentParagraph}}}
-{{#if hasImages}}<p><strong>Images:</strong> {{imageCount}} (external images will be inserted below)</p>{{/if}}
+{{#if hasImages}}<p><span fontColor="#8A8F98">🖼 {{imageCount}} images (local screenshots: open in Zotero)</span></p>{{/if}}
 {{/each}}
-{{/if}}
-{{#if hasTags}}
-<h2>Tags</h2>
-<p><span fontHighlightColor="#FBF5B3" fontColor="#5B4B00">{{tagsJoined}}</span></p>
 {{/if}}`;
 
-const DEFAULT_BODY_TEMPLATE_ZH = `<h1>{{title}}</h1>
-<columns>
-<column columnBackgroundColor="#FAF1E6">
-{{#if authors}}<p><strong>作者</strong> {{authors}}</p>{{/if}}
-{{#if publicationTitle}}<p><strong>来源</strong> {{publicationTitle}}</p>{{/if}}
-{{#if yearOrDate}}<p><strong>年份</strong> {{yearOrDate}}</p>{{/if}}
-{{#if itemType}}<p><strong>类型</strong> {{itemType}}</p>{{/if}}
-</column>
-<column columnBackgroundColor="#EBF2FF">
-{{#if hasDOI}}<p><strong>DOI</strong> {{{doiLink}}}</p>{{/if}}
-{{#if hasURL}}<p><strong>链接</strong> {{{urlLink}}}</p>{{/if}}
-{{#if citeKey}}<p><strong>BibTeX</strong> {{citeKey}}</p>{{/if}}
-<p><strong>Zotero</strong> {{itemKey}}</p>
-</column>
-</columns>
-{{#if hasAbstract}}
-<h2>摘要</h2>
-<highlightBlock emoji="📄" highlightBlockBackgroundColor="#F6F9FC" highlightBlockBorderColor="#D6E4F0">
-{{{abstractParagraph}}}
-</highlightBlock>
-{{/if}}
-{{#if hasAttachments}}
-<h2>附件</h2>
-{{#each attachments}}
-<p>📄 {{title}}{{#if isPDF}}（PDF 保存在 Zotero 本地）{{/if}}</p>
-{{/each}}
-{{/if}}
-{{#if hasAnnotations}}
-<h2>文献批注</h2>
+const ANNOTATIONS_EN = `{{#if hasAnnotations}}
+<h2>💡 Annotations · {{annotationCount}}</h2>
 {{#each annotationGroupsByColor}}
-{{#if colorName}}<h3>{{colorName}}</h3>{{/if}}
+{{#if colorName}}<h3><span fontHighlightColor="{{color}}">{{colorName}} · {{count}}</span></h3>{{/if}}
 {{#each items}}
-<highlightBlock emoji="📝" highlightBlockBackgroundColor="{{color}}26" highlightBlockBorderColor="{{color}}">
-<p><strong>[{{typeLabel}}]</strong></p>
-{{{textParagraph}}}
-{{#if comment}}<p><strong>批注</strong></p>{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}{{/if}}
-{{#if tags}}<p><strong>标签：</strong>{{{tagsXml}}}</p>{{/if}}
+<highlightBlock emoji="{{#if comment}}💡{{else}}📝{{/if}}" highlightBlockBackgroundColor="{{color}}{{bgAlpha}}" highlightBlockBorderColor="{{color}}">
+{{#if comment}}{{{commentBeforeTableXml}}}{{/if}}
+{{#if tags}}<p>{{{tagsXml}}}</p>{{/if}}
+{{#if comment}}
+<p><span fontHighlightColor="#F0F0F0">📎 Source · {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
+{{#if hasText}}<p><em>{{textMd}}</em></p>{{/if}}
+{{{commentAfterTableXml}}}
+{{else}}
+{{#if hasText}}{{{textParagraph}}}{{/if}}
+<p><span fontHighlightColor="{{altColor}}">📎 {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
+{{/if}}
 </highlightBlock>
 {{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
 {{/each}}
 {{/each}}
-{{/if}}
-{{#if hasNotes}}
-<h2>文献笔记</h2>
+{{/if}}`;
+
+const ABSTRACT_EN = `{{#if hasAbstract}}
+<h2>📋 Abstract</h2>
+<highlightBlock emoji="📋" highlightBlockBackgroundColor="#EEF3F8" highlightBlockBorderColor="#8A8F98">
+{{{abstractParagraph}}}
+</highlightBlock>
+{{/if}}`;
+
+const ATTACHMENTS_EN = `{{#if hasAttachments}}
+<h2>📎 Attachments</h2>
+<ul>
+{{#each attachments}}<li>📄 {{title}}{{#if isPDF}} · {{{zoteroOpenLink}}}{{/if}}</li>{{/each}}
+</ul>
+{{/if}}`;
+
+const BIB_EN = `<h2>📚 Bibliographic Details</h2>
+<blockquote>{{#if itemType}}<strong>Type</strong> {{itemType}}
+{{/if}}{{#if hasDOI}}<strong>DOI</strong> {{{doiLink}}}
+{{/if}}{{#if hasURL}}<strong>URL</strong> {{{urlLink}}}
+{{/if}}{{#if citeKey}}<strong>BibTeX</strong> {{citeKey}}
+{{/if}}<strong>Zotero</strong> {{itemKey}}</blockquote>`;
+
+const DEFAULT_BODY_TEMPLATE_EN = `${META_HEAD_EN}
+${ABSTRACT_EN}
+${NOTES_EN}
+${ANNOTATIONS_EN}
+${ATTACHMENTS_EN}
+${BIB_EN}`;
+
+/** 速览版：元信息 + 笔记 + 批注（去摘要/附件/文献信息，适合快速翻阅） */
+const QUICK_BODY_TEMPLATE_EN = `${META_HEAD_EN}
+${NOTES_EN}
+${ANNOTATIONS_EN}`;
+
+/** 归档版：摘要前置 + 全量结构（适合长期留存、完整回溯） */
+const ARCHIVE_BODY_TEMPLATE_EN = `${META_HEAD_EN}
+${ABSTRACT_EN}
+${ANNOTATIONS_EN}
+${NOTES_EN}
+${ATTACHMENTS_EN}
+${BIB_EN}`;
+
+// —— 阅读预设共享片段（ZH）——
+const META_HEAD_ZH = `<h1>{{title}}</h1>
+<blockquote>{{#if authors}}<strong>作者</strong> {{authors}}
+{{/if}}{{#if publicationTitle}}<strong>期刊</strong> {{publicationTitle}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}
+{{/if}}{{#if yearOrDate}}{{#unless publicationTitle}}<strong>发表时间</strong> {{yearOrDate}}
+{{/unless}}{{/if}}📝 {{annotationCount}} 条标注 · 📄 {{noteCount}} 篇笔记</blockquote>
+{{#if hasTags}}<p>{{{tagsXmlDoc}}}</p>{{/if}}`;
+
+const NOTES_ZH = `{{#if hasNotes}}
+<h2>✏️ 我的笔记</h2>
 {{#each notes}}
 {{#if title}}<h3>{{title}}</h3>{{/if}}
 {{{contentParagraph}}}
-{{#if hasImages}}<p><strong>图片：</strong>{{imageCount}} 张（外网可访问图片会自动插入下方）</p>{{/if}}
+{{#if hasImages}}<p><span fontColor="#8A8F98">🖼 {{imageCount}} 张图片（本地截图请在 Zotero 中查看）</span></p>{{/if}}
 {{/each}}
-{{/if}}
-{{#if hasTags}}
-<h2>标签</h2>
-<p><span fontHighlightColor="#FBF5B3" fontColor="#5B4B00">{{tagsJoined}}</span></p>
 {{/if}}`;
+
+const ANNOTATIONS_ZH = `{{#if hasAnnotations}}
+<h2>💡 文献批注 · {{annotationCount}} 条</h2>
+{{#each annotationGroupsByColor}}
+{{#if colorName}}<h3><span fontHighlightColor="{{color}}">{{colorName}} · {{count}} 条</span></h3>{{/if}}
+{{#each items}}
+<highlightBlock emoji="{{#if comment}}💡{{else}}📝{{/if}}" highlightBlockBackgroundColor="{{color}}{{bgAlpha}}" highlightBlockBorderColor="{{color}}">
+{{#if comment}}{{{commentBeforeTableXml}}}{{/if}}
+{{#if tags}}<p>{{{tagsXml}}}</p>{{/if}}
+{{#if comment}}
+<p><span fontHighlightColor="#F0F0F0">📎 原文 · {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
+{{#if hasText}}<p><em>{{textMd}}</em></p>{{/if}}
+{{{commentAfterTableXml}}}
+{{else}}
+{{#if hasText}}{{{textParagraph}}}{{/if}}
+<p><span fontHighlightColor="{{altColor}}">📎 {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
+{{/if}}
+</highlightBlock>
+{{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
+{{/each}}
+{{/each}}
+{{/if}}`;
+
+const ABSTRACT_ZH = `{{#if hasAbstract}}
+<h2>📋 摘要</h2>
+<highlightBlock emoji="📋" highlightBlockBackgroundColor="#EEF3F8" highlightBlockBorderColor="#8A8F98">
+{{{abstractParagraph}}}
+</highlightBlock>
+{{/if}}`;
+
+const ATTACHMENTS_ZH = `{{#if hasAttachments}}
+<h2>📎 附件</h2>
+<ul>
+{{#each attachments}}<li>📄 {{title}}{{#if isPDF}} · {{{zoteroOpenLink}}}{{/if}}</li>{{/each}}
+</ul>
+{{/if}}`;
+
+const BIB_ZH = `<h2>📚 文献详情</h2>
+<blockquote>{{#if itemType}}<strong>类型</strong> {{itemType}}
+{{/if}}{{#if hasDOI}}<strong>DOI</strong> {{{doiLink}}}
+{{/if}}{{#if hasURL}}<strong>链接</strong> {{{urlLink}}}
+{{/if}}{{#if citeKey}}<strong>BibTeX</strong> {{citeKey}}
+{{/if}}<strong>Zotero</strong> {{itemKey}}</blockquote>`;
+
+const DEFAULT_BODY_TEMPLATE_ZH = `${META_HEAD_ZH}
+${ABSTRACT_ZH}
+${NOTES_ZH}
+${ANNOTATIONS_ZH}
+${ATTACHMENTS_ZH}
+${BIB_ZH}`;
+
+/** 速览版：元信息 + 笔记 + 批注（去摘要/附件/文献信息，适合快速翻阅） */
+const QUICK_BODY_TEMPLATE_ZH = `${META_HEAD_ZH}
+${NOTES_ZH}
+${ANNOTATIONS_ZH}`;
+
+/** 归档版：摘要前置 + 全量结构（适合长期留存、完整回溯） */
+const ARCHIVE_BODY_TEMPLATE_ZH = `${META_HEAD_ZH}
+${ABSTRACT_ZH}
+${ANNOTATIONS_ZH}
+${NOTES_ZH}
+${ATTACHMENTS_ZH}
+${BIB_ZH}`;
 
 function isChineseLocale(): boolean {
   try {
@@ -561,9 +672,21 @@ function getDefaultTitleTemplate(): string {
 }
 
 function getDefaultBodyTemplate(): string {
-  return isChineseLocale()
-    ? DEFAULT_BODY_TEMPLATE_ZH
-    : DEFAULT_BODY_TEMPLATE_EN;
+  const zh = isChineseLocale();
+  // 阅读预设：quick=速览 / full=研读（默认）/ archive=归档
+  let preset = "full";
+  try {
+    preset = String(getPref("readingPreset") || "full");
+  } catch {
+    preset = "full";
+  }
+  if (preset === "quick") {
+    return zh ? QUICK_BODY_TEMPLATE_ZH : QUICK_BODY_TEMPLATE_EN;
+  }
+  if (preset === "archive") {
+    return zh ? ARCHIVE_BODY_TEMPLATE_ZH : ARCHIVE_BODY_TEMPLATE_EN;
+  }
+  return zh ? DEFAULT_BODY_TEMPLATE_ZH : DEFAULT_BODY_TEMPLATE_EN;
 }
 
 export interface TemplatePreset {

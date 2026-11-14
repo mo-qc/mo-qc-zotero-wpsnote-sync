@@ -4,6 +4,7 @@
  */
 
 import { escapeXml, link } from "./xmlHelpers";
+import { codeBlockXml } from "./markdown";
 import { getMappedEntry } from "../modules/syncMapping";
 
 const KNOWN_ENTITIES = /&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/g;
@@ -168,6 +169,19 @@ export function htmlToWpsXml(html: string): string {
   s = s.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, "");
   s = s.replace(/<img\b[^>]*>/gi, "");
 
+  // 代码块：<pre>（常内含 <code class="language-x">）→ WPS <codeblock lang>。
+  // 必须在剥壳/换行压平之前处理，否则换行与缩进会全部丢失。
+  s = s.replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, (_, inner) => {
+    const raw = String(inner || "");
+    const langMatch = raw.match(
+      /class\s*=\s*["'][^"']*(?:language-|lang-)([\w+#.-]+)/i,
+    );
+    const code = decodeEntities(
+      raw.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, ""),
+    ).replace(/\n$/, "");
+    return `\n${codeBlockXml(langMatch ? langMatch[1] : "", code)}\n`;
+  });
+
   // wrapper 标签就地剥掉（保留内容），让内部块级结构裸露
   s = s.replace(
     /<\/?(?:div|section|article|aside|header|footer|nav|figure|figcaption|main|span|font)\b[^>]*>/gi,
@@ -223,6 +237,13 @@ export function htmlToWpsXml(html: string): string {
     WPS_KEEP.test(m) ? m : "",
   );
 
+  // 代码块内的换行先用占位符藏起来：下面按行切分顶层块，
+  // 否则多行代码会被拆成「代码块 + 段落」两部分（XML 结构损坏）
+  const CODE_NL = "\u0001";
+  s = s.replace(/<codeblock\b[\s\S]*?<\/codeblock>/gi, (m) =>
+    m.replace(/\n/g, CODE_NL),
+  );
+
   // 顶层裸文本段落化
   const segments = s.split(/\n+/);
   const blocks: string[] = [];
@@ -241,5 +262,5 @@ export function htmlToWpsXml(html: string): string {
       blocks.push(`<p>${escapeXml(decodeEntities(t))}</p>`);
     }
   }
-  return blocks.join("\n");
+  return blocks.join("\n").split(CODE_NL).join("\n");
 }

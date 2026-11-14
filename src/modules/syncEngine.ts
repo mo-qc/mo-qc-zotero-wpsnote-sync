@@ -17,9 +17,11 @@ import {
   ZoteroNote,
   ZoteroNoteImage,
 } from "../utils/xmlBuilder";
-import { getPref, getMcpConfig } from "../utils/prefs";
+import { getPref, getMcpConfig, getSyncTarget } from "../utils/prefs";
+import { syncItemCraft } from "./craftSync";
 import {
   getMappedEntry,
+  getAllMappings,
   recordSyncResult,
   removeMappedNote,
   SyncMappingEntry,
@@ -28,8 +30,8 @@ import { runWithConcurrency } from "../utils/concurrencyHelper";
 
 export type ConflictResolution = "overwrite" | "skip" | "create-copy";
 
-/** 冲突来源：item = Zotero 侧文献变更；wps = WPS 端笔记被手工修改 */
-export type ConflictKind = "item" | "wps";
+/** 冲突来源：item = Zotero 侧文献变更；wps = WPS 端笔记被手工修改；craft = Craft 端文档被手工修改 */
+export type ConflictKind = "item" | "wps" | "craft";
 
 export interface SyncOptions {
   interfaceType?: McpInterfaceType;
@@ -223,6 +225,46 @@ export function isMappingInvalidError(err: any): boolean {
   return patterns.some((p) => msg.includes(p));
 }
 
+export interface WpsSearchCandidate {
+  note_id?: string;
+  title?: string;
+}
+
+/**
+ * WPS 标题搜索兑底的候选选择器（纯函数，可单测）。
+ *
+ * 匹配优先级：
+ *   1. 精确等于模板渲染后的完整标题（默认含「[Zotero] 」前缀）；
+ *   2. 标题内含唯一 item key（模板变量 {{itemKey}}，全局唯一）；
+ *   3. 宽松包含文献标题（旧笔记/自改标题场景，最易误报，放最后）。
+ * 每一级都先过滤 isOwnedByOther：同名文献场景下，搜索兑底命中
+ * 已映射给其他条目的笔记并接管，会让两篇共写一篇互相覆盖
+ * （Craft 侧同型逻辑已早有此校验，见 craftSync 搜索兑底注释）。
+ */
+export function pickWpsSearchMatch(
+  candidates: WpsSearchCandidate[],
+  ref: { templateTitle: string; itemTitle: string; itemKey: string },
+  isOwnedByOther: (noteId?: string) => boolean,
+): WpsSearchCandidate | undefined {
+  const norm = (s?: string) =>
+    String(s || "")
+      .trim()
+      .toLowerCase();
+  const tpl = norm(ref.templateTitle);
+  const dataTitle = norm(ref.itemTitle);
+  if (!tpl && !dataTitle) return undefined;
+
+  const available = candidates.filter(
+    (c) => c.note_id && !isOwnedByOther(c.note_id),
+  );
+  return (
+    (tpl && available.find((c) => norm(c.title) === tpl)) ||
+    available.find((c) => norm(c.title).includes(norm(ref.itemKey))) ||
+    (dataTitle && available.find((c) => norm(c.title).includes(dataTitle))) ||
+    undefined
+  );
+}
+
 function checkCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw new Error("同步已取消");
@@ -316,6 +358,10 @@ export async function syncItem(
   item: Zotero.Item,
   options?: SyncOptions,
 ): Promise<SyncResult> {
+  // 同步目标二选一：Craft 走独立执行路径（模板/锁/触发机制共用）
+  if (getSyncTarget() === "craft") {
+    return syncItemCraft(item, options);
+  }
   const result: SyncResult = {
     success: false,
     itemKey: item.key,
@@ -398,13 +444,16 @@ export async function syncItem(
       }
     }
 
-    // 增量同步：文献未变更且上次同步成功，则直接跳过
+    // 增量同步：文献未变更且上次同步成功，则直接跳过。
+    // 要求 noteModified 基准存在（与 Craft 侧对称）：老映射基准缺失时跳过会让
+    // 轮询永远无法检测该条（轮询 filter 要求基准），走一次完整同步补上基准后恢复
     const incrementalSync =
       options?.incrementalSync ?? Boolean(getPref("incrementalSync"));
     if (
       incrementalSync &&
       mappedEntry?.lastSuccess &&
       mappedEntry.itemModified &&
+      mappedEntry.noteModified &&
       mappedEntry.itemModified === itemModified
     ) {
       ztoolkit.log("Incremental sync: skip unchanged item", item.key);
@@ -442,12 +491,14 @@ export async function syncItem(
           result.success = true;
           result.noteId = mappedEntry.noteId;
           result.noteUrl = mappedEntry.noteUrl;
+          // skip 后对齐 itemModified（已知晓条目变更并选择跳过），
+          // 否则条目时间恒晚于基准，每次同步重复弹同一处冲突
           recordSyncResult(item.key, {
             success: true,
             title: data.title,
             noteId: mappedEntry.noteId,
             noteUrl: mappedEntry.noteUrl,
-            itemModified: mappedEntry.itemModified,
+            itemModified,
           });
           return result;
         }
@@ -487,13 +538,15 @@ export async function syncItem(
               result.success = true;
               result.noteId = mappedEntry.noteId;
               result.noteUrl = mappedEntry.noteUrl;
+              // skip 后对齐 noteModified 到 WPS 端现状：不更新会让
+              // update_time 恒晚于基准，每次同步重复弹同一处冲突
               recordSyncResult(item.key, {
                 success: true,
                 title: data.title,
                 noteId: mappedEntry.noteId,
                 noteUrl: mappedEntry.noteUrl,
                 itemModified,
-                noteModified: mappedEntry.noteModified,
+                noteModified: wpsModified,
               });
               return result;
             }
@@ -520,13 +573,28 @@ export async function syncItem(
     // 2. 映射未命中时，按标题关键词搜索（用文献标题本身做锚点，
     //    与标题模板前缀无关，避免用户改模板后兜底失效重复建笔记）
     if (!noteId && updateExisting) {
-      const existing = await client.searchNotes(data.title, 5);
-      const match = existing.find(
-        (n) =>
-          String((n as { title?: string }).title || "").includes(data.title) ||
-          String((n as { title?: string }).title || "").includes(item.key),
-      ) as { note_id?: string; title?: string } | undefined;
-      if (match?.note_id) {
+      const existing = (await client.searchNotes(
+        data.title,
+        10,
+      )) as WpsSearchCandidate[];
+      const mappings = getAllMappings();
+      const isOwnedByOther = (id?: string) =>
+        !id
+          ? false
+          : Object.entries(mappings).some(
+              ([k, e]) => k !== item.key && e.noteId === id,
+            );
+      const match = pickWpsSearchMatch(
+        existing,
+        {
+          templateTitle: title,
+          itemTitle: data.title,
+          itemKey: item.key,
+        },
+        isOwnedByOther,
+      );
+      if (match) {
+        ztoolkit.log("WPS search fallback hit", item.key, match.note_id);
         noteId = match.note_id;
       }
     }
@@ -642,6 +710,38 @@ export async function syncItem(
 
 const EXTRA_NOTE_ID_KEY = "ZWS-Note-Id";
 
+/**
+ * 插件自身保存条目（写 extra 冗余）的时间戳记录。
+ * saveTx 会触发 Notifier modify → 自动同步再排一轮全量同步，
+ * 内容没变但白写一遍远端（双倍请求/限流压力）。hooks.onNotify
+ * 在排程前用 isSelfSave 过滤掉这类自我触发；窗口期后自然失效，
+ * 真实用户编辑不受影响（后续 modify 或手动同步仍会推送）。
+ */
+const SELF_SAVE_WINDOW_MS = 10_000;
+const recentSelfSaves = new Map<string, number>();
+
+export function markSelfSave(itemKey: string): void {
+  recentSelfSaves.set(itemKey, Date.now());
+  // 防无界增长：超限时淘汰最早条目（Map 保插入序）。
+  // 用迭代器 done 判断空表——键可能是 undefined（调用方传入无 key 的
+  // mock 条目时），按 value!==undefined 判断会把"最旧键是 undefined"
+  // 误判为空表，导致淘汰永久卡死、集合无界增长
+  if (recentSelfSaves.size > 1000) {
+    const oldest = recentSelfSaves.keys().next();
+    if (!oldest.done) recentSelfSaves.delete(oldest.value);
+  }
+}
+
+export function isSelfSave(itemKey: string): boolean {
+  const ts = recentSelfSaves.get(itemKey);
+  if (ts === undefined) return false;
+  if (Date.now() - ts > SELF_SAVE_WINDOW_MS) {
+    recentSelfSaves.delete(itemKey);
+    return false;
+  }
+  return true;
+}
+
 /** 从条目 extra 字段读取冗余备份的 WPS noteId */
 export function readNoteIdFromExtra(item: Zotero.Item): string | undefined {
   const extra = (item.getField("extra") as string) || "";
@@ -668,6 +768,9 @@ export async function writeNoteIdToExtra(
     const next = [...lines, `${EXTRA_NOTE_ID_KEY}: ${noteId}`].join("\n");
     if (next === base) return;
     item.setField("extra", next);
+    // saveTx 触发的 modify 属于自我修改：标记后由 hooks.onNotify 过滤，
+    // 避免自动同步再排一轮全量同步
+    markSelfSave(item.key);
     await item.saveTx();
     ztoolkit.log("Wrote noteId to item extra", item.key, noteId);
   } catch (e) {
@@ -708,6 +811,7 @@ export async function clearNoteIdFromExtra(item: Zotero.Item): Promise<void> {
     const next = lines.join("\n");
     if (next === base) return;
     item.setField("extra", next);
+    markSelfSave(item.key);
     await item.saveTx();
     ztoolkit.log("Cleared noteId from item extra", item.key);
   } catch (e) {

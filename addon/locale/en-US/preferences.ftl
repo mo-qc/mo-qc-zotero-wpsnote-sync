@@ -1,7 +1,9 @@
 pref-title = Zotero → WPS Notes Sync Settings
 pref-mcpInterfaceType = Interface
-pref-mcpInterfaceType-cloud = Cloud MCP
-pref-mcpInterfaceType-local = Local MCP (Streamable HTTP)
+pref-mcpInterfaceType-cloud =
+    .label = Cloud MCP
+pref-mcpInterfaceType-local =
+    .label = Local MCP (Streamable HTTP)
 pref-mcpAuth = API Key / Authorization
 pref-mcpAuth-help = Use the X-API-Key value for cloud, or the Authorization Bearer / API_KEY value for local. Saving here takes over the JSON config below.
 pref-mcpConfigJson = Advanced: Full MCP JSON (optional)
@@ -40,3 +42,32 @@ pref-help = { $name } Build { $version } { $time }
 pref-mcpServerWriteEnabled = Allow external MCP clients to write (sync / pull)
 pref-mcpServerToken = Access token (optional)
 pref-mcpServer-help = The plugin serves an MCP endpoint at 127.0.0.1:23119/wpsnote/mcp for external AI clients (Claude, llm-for-zotero, ...) to read sync status or trigger sync. Write operations are off by default; if a token is set, clients must send Authorization: Bearer <token> or X-API-Key.
+
+# Sync target & Craft connection
+pref-syncTarget = Sync Target
+pref-syncTarget-wps =
+    .label = WPS Notes
+pref-syncTarget-craft =
+    .label = Craft Documents
+pref-syncTarget-help = Choose one: all sync paths (manual, tag, modify-triggered) push to the selected target; mappings for both sides are stored independently, so switching back keeps the original mappings valid
+pref-craftApiLink = API Link
+pref-craftApiLink-help = Link generated under Craft desktop "Settings → API links", e.g. https://connect.craft.do/links/{linkId}/api/v1
+pref-craftApiToken = Bearer Token
+pref-craftApiToken-help = Access token shown on the same API link page; stored locally only (obfuscated)
+pref-craftFolderId = Target Folder ID (optional)
+pref-craftFolderId-help = New documents are created inside this folder; leave blank to create in Unsorted. Get the id from the folders list returned by the API
+pref-craftTest = Test Connection
+
+# Reading experience
+pref-readingPreset = Reading Preset
+pref-readingPreset-quick =
+    .label = Quick (notes + annotations)
+pref-readingPreset-full =
+    .label = Full (default structure)
+pref-readingPreset-archive =
+    .label = Archive (abstract first + everything)
+pref-readingPreset-help = Controls the synced note structure: Quick keeps meta/notes/annotations only; Full is the default; Archive moves the abstract to the top and keeps all sections. Applies only when the body template is blank; affects both WPS and Craft
+pref-colorSemanticMap = Color Semantic Map (JSON, optional)
+pref-colorSemanticMap-help = E.g. {"{"}“#7fba00”:“Key finding”,“#ff6666”:“To verify”{"}"}: maps Zotero annotation colors to semantic group titles; leave blank to use default color names. Invalid JSON is silently ignored and never blocks sync
+pref-craftArchiveByTag = Auto-archive by first tag into subfolders
+pref-craftArchiveByTag-help = When enabled, newly created Craft documents are placed into a subfolder named after the item's first tag (created under Target Folder if missing); existing documents are not moved, and any archiving failure falls back to the default folder without blocking sync

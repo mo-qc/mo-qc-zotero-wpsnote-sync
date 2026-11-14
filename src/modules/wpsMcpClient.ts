@@ -51,6 +51,21 @@ export interface NoteOutline {
   blocks?: NoteBlock[];
 }
 
+/** list_notes / get_note_info 返回的笔记摘要 */
+export interface NoteSummary {
+  note_id?: string;
+  title?: string;
+  /** WPS 端修改时间（数字时间戳） */
+  update_time?: number;
+  create_time?: number;
+  delete_time?: number;
+  trash_status?: number;
+  linkUrl?: string;
+  link_id?: string;
+  tags?: string[];
+  starred?: boolean;
+}
+
 export type McpInterfaceType = "cloud" | "local";
 
 export interface McpClientOptions {
@@ -246,6 +261,7 @@ export class WpsMcpClient {
     method: string,
     params?: Record<string, unknown>,
     id?: number | null,
+    idempotent = true,
   ): Promise<unknown> {
     const maxRetries = this.retries;
     let lastError: Error | undefined;
@@ -258,8 +274,14 @@ export class WpsMcpClient {
         const isNetworkError =
           !err?.message?.includes("MCP error") &&
           !err?.message?.includes("MCP tool error");
+        // 非幂等工具（create/edit 等写操作）只在 429 时重试——429 表示请求
+        // 被限流拒绝、未执行；5xx/网络错误可能已执行，重试会重复写入
         const retryable =
-          err instanceof McpError ? err.isRetryable : isNetworkError;
+          err instanceof McpError
+            ? idempotent
+              ? err.isRetryable
+              : err.code === 429
+            : idempotent && isNetworkError;
         if (!retryable || attempt === maxRetries) {
           throw err;
         }
@@ -455,6 +477,16 @@ export class WpsMcpClient {
       }
     }
 
+    // 保留原始 content 数组：图片类工具（read_image）把数据放在 MCP 原生
+    // image content 项（{type:"image", mimeType, data}）里，不走 JSON text，
+    // 只认 text 会把图片丢掉（回流图片全灭的直接原因）
+    if (resultObj && Array.isArray(resultObj.content)) {
+      parsed = {
+        ...(parsed && typeof parsed === "object" ? parsed : {}),
+        __mcpContent: resultObj.content,
+      };
+    }
+
     // 解包统一响应信封
     if (parsed && typeof parsed === "object" && "ok" in parsed) {
       const envelope = parsed as McpEnvelope;
@@ -486,12 +518,15 @@ export class WpsMcpClient {
     args: Record<string, any>,
   ): Promise<McpToolResult> {
     await this.initialize();
+    // 读类工具幂等可安全重试；其余（create/edit/delete 等写操作）按非幂等处理
+    const idempotent = /^(get_|list_|search_|read_|query_)/.test(name);
 
     try {
       const result = await this.post(
         "tools/call",
         { name, arguments: args },
         this.nextId(),
+        idempotent,
       );
       return this.parseToolResult(result);
     } catch (err: any) {
@@ -506,6 +541,7 @@ export class WpsMcpClient {
           "tools/call",
           { name, arguments: args },
           this.nextId(),
+          idempotent,
         );
         return this.parseToolResult(result);
       }
@@ -625,7 +661,7 @@ export class WpsMcpClient {
   async getNoteInfo(
     noteId: string,
   ): Promise<{ title: string; updateTime: number }> {
-    const res = await this.callTool("get_note_info", { noteId });
+    const res = await this.callTool("get_note_info", { note_id: noteId });
     const notes = (res as { notes?: Array<Record<string, any>> }).notes;
     const note = Array.isArray(notes)
       ? notes.find((n) => String(n.note_id) === String(noteId)) || notes[0]
@@ -641,55 +677,128 @@ export class WpsMcpClient {
     };
   }
 
-  /** 读回笔记内容（语义 XML），支持分页；用于 WPS → Zotero 回流 */
+  /**
+   * 读回笔记内容（语义 XML），支持分页；用于 WPS → Zotero 回流。
+   *
+   * 分页语义以服务端 pagination 为准：`offset` 是 block 下标（0-based），
+   * 单页上限由 `block_limit` 决定，服务端会返回实际 limit 与 returned_blocks。
+   * 续读必须用 `next_offset`（缺失时回退 offset + returned_blocks），
+   * 不能按请求的 block_limit 自增——服务端可能放大单页（实测 50 → 119），
+   * 自增会重复读取已返回的块，回流内容成倍膨胀。
+   */
   async readNote(
     noteId: string,
     offset = 0,
-    limit = 50,
+    blockLimit = 50,
   ): Promise<{
     title: string;
     content: string;
     truncated: boolean;
     hasMore: boolean;
+    nextOffset: number;
   }> {
-    const res = await this.callTool("read_note", { noteId, offset, limit });
+    const res = await this.callTool("read_note", {
+      note_id: noteId,
+      offset,
+      block_limit: blockLimit,
+    });
     const data = res as {
       title?: string;
       content?: string;
       truncated?: boolean;
-      pagination?: { has_more?: boolean };
+      pagination?: {
+        offset?: number;
+        limit?: number;
+        returned_blocks?: number;
+        has_more?: boolean;
+        next_offset?: number;
+      };
     };
     if (typeof data.content !== "string" || !data.content) {
       throw new Error(
         `read_note 未返回内容：${JSON.stringify(res).slice(0, 200)}`,
       );
     }
+    const page = data.pagination || {};
+    const start = Number.isFinite(page.offset) ? Number(page.offset) : offset;
+    const returned = Number.isFinite(page.returned_blocks)
+      ? Number(page.returned_blocks)
+      : 0;
+    const hasMore = Boolean(page.has_more);
+    const nextOffset = Number.isFinite(page.next_offset)
+      ? Number(page.next_offset)
+      : start + Math.max(returned, 1);
     return {
       title: String(data.title || ""),
       content: data.content,
       truncated: Boolean(data.truncated),
-      hasMore: Boolean(data.pagination?.has_more),
+      hasMore,
+      nextOffset,
+    };
+  }
+
+  /** 单页笔记列表（含 meta.has_more / next_token） */
+  async listNotesPage(opts: {
+    page?: number;
+    pageSize?: number;
+    limit?: number;
+  }): Promise<{ notes: NoteSummary[]; hasMore: boolean; nextToken?: string }> {
+    const args: Record<string, unknown> = {};
+    if (opts.page !== undefined) args.page = opts.page;
+    if (opts.pageSize !== undefined) args.page_size = opts.pageSize;
+    if (opts.limit !== undefined) args.limit = opts.limit;
+    const res = (await this.callTool("list_notes", args)) as {
+      notes?: unknown[];
+      items?: unknown[];
+      meta?: { has_more?: boolean; next_token?: string };
+    };
+    const list = res.notes || res.items || [];
+    return {
+      notes: Array.isArray(list) ? (list as NoteSummary[]) : [],
+      hasMore: Boolean(res.meta?.has_more),
+      nextToken: res.meta?.next_token,
     };
   }
 
   /**
-   * 列出正常状态的笔记（不含回收站）。用于校验映射笔记是否仍可见。
+   * 列出全部正常状态的笔记（不含回收站），自动翻页。
+   * 单次 limit 可能被服务端截断（meta.has_more/truncated），
+   * 只拉一页会把未返回的笔记误判为「已删」→ 清映射后重复建笔记。
    */
-  async listNotes(
-    limit = 1000,
-  ): Promise<
-    Array<{ note_id?: string; title?: string; delete_time?: number }>
-  > {
-    const res = await this.callTool("list_notes", { limit });
-    const resObj = res as { notes?: unknown[]; items?: unknown[] };
-    const list = resObj.notes || resObj.items || [];
-    return Array.isArray(list)
-      ? (list as Array<{
-          note_id?: string;
-          title?: string;
-          delete_time?: number;
-        }>)
-      : [];
+  async listNotes(limit = 1000): Promise<NoteSummary[]> {
+    const pageSize = Math.min(Math.max(limit, 20), 200);
+    const out: NoteSummary[] = [];
+    const seen = new Set<string>();
+    for (let page = 1; page <= 200; page++) {
+      const r = await this.listNotesPage({ page, pageSize });
+      let added = 0;
+      for (const n of r.notes) {
+        const id = String(n.note_id || "");
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        out.push(n);
+        added++;
+      }
+      // 服务端不再返回新条目（分页参数被忽略）或已到末页
+      if (!r.hasMore || added === 0) break;
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  /**
+   * 全量笔记 update_time 索引（noteId → update_time），一次列表请求取得。
+   * 轮询检测用：避免逐篇 get_note_info 的 N 次请求。
+   */
+  async getNoteUpdateTimes(): Promise<Map<string, number>> {
+    const notes = await this.listNotes(1000);
+    const map = new Map<string, number>();
+    for (const n of notes) {
+      const id = String(n.note_id || "");
+      const t = Number(n.update_time);
+      if (id && Number.isFinite(t)) map.set(id, t);
+    }
+    return map;
   }
 
   async searchNotes(keyword: string, limit = 10): Promise<unknown[]> {
@@ -713,6 +822,47 @@ export class WpsMcpClient {
         []
       : resObj.items || resObj.data?.items || resObj.data || [];
     return Array.isArray(candidates) ? candidates : [];
+  }
+
+  /**
+   * 读取图片块的实际图片内容（base64 data URI）。
+   * 回流时用于把 WPS 笔记本体图片搬回 Zotero（<img> 是只读标签，
+   * read_note 只给 fileID，拿不到可直接写入的 src）。
+   */
+  async readImage(
+    noteId: string,
+    blockId: string,
+  ): Promise<{ dataUrl?: string; mimeType?: string }> {
+    const res = (await this.callTool("read_image", {
+      note_id: noteId,
+      block_id: blockId,
+    })) as {
+      data?: string;
+      base64?: string;
+      mime_type?: string;
+      mimeType?: string;
+      __mcpContent?: { type?: string; mimeType?: string; data?: string }[];
+    };
+
+    // 优先取 MCP 原生 image content 项（实测该工具的 base64 在这里）
+    const imageItem = Array.isArray(res.__mcpContent)
+      ? res.__mcpContent.find(
+          (c) => c?.type === "image" && typeof c.data === "string" && c.data,
+        )
+      : undefined;
+    const mime =
+      imageItem?.mimeType || res.mime_type || res.mimeType || "image/png";
+    const raw = imageItem?.data || res.data || res.base64;
+    if (!raw) return {};
+    return {
+      dataUrl: raw.startsWith("data:") ? raw : `data:${mime};base64,${raw}`,
+      mimeType: mime,
+    };
+  }
+
+  /** 触发笔记与云端同步（写入后确保本地编辑已落盘到远端） */
+  async syncNote(noteId: string): Promise<void> {
+    await this.callTool("sync_note", { note_id: noteId });
   }
 
   async insertImage(

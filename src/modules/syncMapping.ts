@@ -10,6 +10,8 @@ const PREF_KEY = "syncMapping";
 export interface SyncMappingEntry {
   noteId?: string;
   noteUrl?: string;
+  /** Craft 目标：documentId（与 WPS noteId 并存，二选一目标切换时互不覆盖） */
+  craftDocId?: string;
   title?: string;
   lastSync: number;
   itemModified?: string;
@@ -63,6 +65,22 @@ export function getMappedEntry(itemKey: string): SyncMappingEntry | undefined {
   return undefined;
 }
 
+/**
+ * Craft 目标专用读取：守卫 craftDocId 而非 noteId。
+ * 不放宽 getMappedEntry 本体——WPS 主流程依赖 noteId 守卫，
+ * craft-only 条目若被它放行会导致 WPS 可见性校验误判、误删映射。
+ */
+export function getCraftMappedEntry(
+  itemKey: string,
+): SyncMappingEntry | undefined {
+  const mapping = loadMapping();
+  const entry = mapping[itemKey];
+  if (entry?.craftDocId) {
+    return entry;
+  }
+  return undefined;
+}
+
 export function getMappedNote(
   itemKey: string,
 ): { noteId: string; noteUrl: string } | undefined {
@@ -80,6 +98,7 @@ export function recordSyncResult(
     title?: string;
     noteId?: string;
     noteUrl?: string;
+    craftDocId?: string;
     itemModified?: string;
     noteModified?: string;
     error?: string;
@@ -105,6 +124,9 @@ export function recordSyncResult(
   if (result.noteUrl) {
     entry.noteUrl = result.noteUrl;
   }
+  if (result.craftDocId) {
+    entry.craftDocId = result.craftDocId;
+  }
   if (result.itemModified !== undefined) {
     entry.itemModified = result.itemModified;
   }
@@ -121,11 +143,11 @@ export function removeMappedNote(itemKey: string): void {
   saveMapping(mapping);
 }
 
-/** 只更新 WPS 端修改时间基准，不动同步状态（回流拉取后调用） */
+/** 只更新端修改时间基准，不动同步状态（回流拉取后调用；WPS/Craft 共用 noteModified 字段） */
 export function updateNoteModified(itemKey: string, noteModified: string) {
   const mapping = loadMapping();
   const entry = mapping[itemKey];
-  if (!entry?.noteId) return;
+  if (!entry?.noteId && !entry?.craftDocId) return;
   entry.noteModified = noteModified;
   mapping[itemKey] = entry;
   saveMapping(mapping);
@@ -135,7 +157,7 @@ export function updateNoteModified(itemKey: string, noteModified: string) {
 export function recordPullNoteId(itemKey: string, pullNoteId: string): void {
   const mapping = loadMapping();
   const entry = mapping[itemKey];
-  if (!entry?.noteId) return;
+  if (!entry?.noteId && !entry?.craftDocId) return;
   entry.pullNoteId = pullNoteId;
   mapping[itemKey] = entry;
   saveMapping(mapping);

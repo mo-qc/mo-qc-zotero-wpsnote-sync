@@ -1,7 +1,9 @@
 pref-title = Zotero → WPS 笔记同步设置
 pref-mcpInterfaceType = 接口类型
-pref-mcpInterfaceType-cloud = 云端 MCP
-pref-mcpInterfaceType-local = 本地 MCP（Streamable HTTP）
+pref-mcpInterfaceType-cloud =
+    .label = 云端 MCP
+pref-mcpInterfaceType-local =
+    .label = 本地 MCP（Streamable HTTP）
 pref-mcpAuth = API Key / Authorization
 pref-mcpAuth-help = 云端填 X-API-Key 的值；本地填 Authorization Bearer 或 API_KEY 的值。在此保存后将接管下方的 JSON 配置。
 pref-mcpConfigJson = 高级：完整 MCP JSON（可选）
@@ -40,3 +42,32 @@ pref-help = { $name } Build { $version } { $time }
 pref-mcpServerWriteEnabled = 允许外部 MCP 客户端写操作（同步 / 回流）
 pref-mcpServerToken = 访问令牌（可选）
 pref-mcpServer-help = 插件在本机 127.0.0.1:23119 提供 MCP 端点 /wpsnote/mcp，供 Claude、llm-for-zotero 等外部 AI 客户端读取同步状态或触发同步。写操作默认关闭；填写访问令牌后，客户端需在请求头携带 Authorization: Bearer <令牌> 或 X-API-Key。
+
+# 同步目标与 Craft 连接
+pref-syncTarget = 同步目标
+pref-syncTarget-wps =
+    .label = WPS 笔记
+pref-syncTarget-craft =
+    .label = Craft 文档
+pref-syncTarget-help = 二选一：选中后所有同步（手动、标签、修改触发）都推送到该目标；两边的映射记录互相独立，切换回来后原映射仍然有效
+pref-craftApiLink = API Link
+pref-craftApiLink-help = Craft 桌面端「设置 → API links」生成的链接地址，形如 https://connect.craft.do/links/{linkId}/api/v1
+pref-craftApiToken = Bearer Token
+pref-craftApiToken-help = 同一 API link 页面展示的访问令牌，仅保存在本机（混淆存储）
+pref-craftFolderId = 目标文件夹 ID（可选）
+pref-craftFolderId-help = 新文档创建到该文件夹；留空则创建到「未整理」。可在 Craft 中打开文件夹后从 API 返回的 folders 列表获取
+pref-craftTest = 测试连接
+
+# 阅读体验
+pref-readingPreset = 阅读预设
+pref-readingPreset-quick =
+    .label = 速览（笔记 + 批注）
+pref-readingPreset-full =
+    .label = 研读（默认全结构）
+pref-readingPreset-archive =
+    .label = 归档（摘要前置 + 全量）
+pref-readingPreset-help = 控制同步笔记的结构：速览只保留元信息、笔记与批注；研读为默认结构；归档把摘要前置并保留全部区块。仅在「笔记正文模板」留空时生效，WPS 与 Craft 同时生效
+pref-colorSemanticMap = 颜色语义映射（JSON，可选）
+pref-colorSemanticMap-help = 例如 {"{"}“#7fba00”:“核心结论”,“#ff6666”:“存疑待验证”{"}"}：把 Zotero 标注颜色映射为批注分组标题的语义名；留空则用默认颜色名（绿色/红色…）。解析失败时自动忽略，不影响同步
+pref-craftArchiveByTag = 按首标签自动归档到子文件夹
+pref-craftArchiveByTag-help = 开启后，新建的 Craft 文档会按条目的第一个标签找/建同名子文件夹并放入（在「目标文件夹」下创建）；已有文档位置不变，归档失败自动回落默认文件夹，不影响同步

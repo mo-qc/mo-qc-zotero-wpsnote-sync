@@ -9,6 +9,7 @@ import type {
   ZoteroNoteImage,
   ZoteroAnnotation,
 } from "../utils/xmlBuilder";
+import { getMappedEntry } from "./syncMapping";
 
 function getCreatorString(creator: any): string {
   const parts: string[] = [];
@@ -334,8 +335,11 @@ export function extractItemData(
 
   const notes: ZoteroNote[] = [];
   if (opts.includeNotes && item.getNotes) {
+    // 排除回流子笔记：它是同步产物的快照，回同步会造成内容套娃放大
+    const pullId = Number(getMappedEntry(item.key)?.pullNoteId || 0);
     const noteIds = item.getNotes();
     for (const noteId of noteIds) {
+      if (pullId && noteId === pullId) continue;
       const noteItem = Zotero.Items.get(noteId);
       if (noteItem && noteItem.isNote()) {
         const note = noteItem.getNote ? noteItem.getNote() : "";

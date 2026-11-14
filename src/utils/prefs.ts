@@ -72,6 +72,67 @@ export function setLocalMcpToken(value: string): void {
   setPref("localMcpToken", trimmed ? encryptString(trimmed) : "");
 }
 
+/** 同步目标：wps（默认）或 craft */
+export function getSyncTarget(): "wps" | "craft" {
+  const v = String(getPref("syncTarget") || "wps");
+  return v === "craft" ? "craft" : "wps";
+}
+
+export function setSyncTarget(target: "wps" | "craft"): void {
+  setPref("syncTarget", target);
+}
+
+/** Craft API Bearer token（混淆存储，兼容明文旧值） */
+export function getCraftApiToken(): string {
+  const raw = String(getPref("craftApiToken") || "");
+  if (!raw) return "";
+  const decrypted = decryptString(raw);
+  return decrypted !== null ? decrypted : raw;
+}
+
+export function setCraftApiToken(value: string): void {
+  const trimmed = value.trim();
+  setPref("craftApiToken", trimmed ? encryptString(trimmed) : "");
+}
+
+export interface CraftConfig {
+  link: string;
+  token: string;
+  folderId: string;
+}
+
+export function getCraftConfig(): CraftConfig {
+  return {
+    link: String(getPref("craftApiLink") || "").trim(),
+    token: getCraftApiToken(),
+    folderId: String(getPref("craftFolderId") || "").trim(),
+  };
+}
+
+/**
+ * 颜色语义映射（JSON：{"#7fba00":"核心结论"}）。
+ * 用于批注分组标题：用户定义了语义名就用语义名，否则回落默认色名。
+ * 解析失败/非法项静默忽略，不影响同步。
+ */
+export function getColorSemanticMap(): Record<string, string> {
+  try {
+    const raw = String(getPref("colorSemanticMap") || "");
+    if (!raw.trim()) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const key = String(k).trim().toLowerCase();
+      const val = String(v ?? "").trim();
+      if (/^#[0-9a-f]{3,8}$/.test(key) && val) out[key] = val;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export interface McpServerConfig {
   url: string;
   transport?: string;

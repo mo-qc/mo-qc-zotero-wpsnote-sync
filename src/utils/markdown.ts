@@ -98,16 +98,55 @@ function parseListItem(line: string): { content: string; checked?: boolean } {
   return { content: trimmed };
 }
 
+/** 每 2 个前导空格 = 1 级缩进（WPS listLevel 语义） */
+const LIST_INDENT_UNIT = 2;
+
+function listLevelOf(line: string): number {
+  const indent = (line.match(/^[ \t]*/)?.[0] || "").replace(/\t/g, "  ").length;
+  return Math.min(Math.floor(indent / LIST_INDENT_UNIT), 9);
+}
+
+/**
+ * 围栏代码块 → WPS `<codeblock lang="...">`。
+ * 含 `<` `>` `&` 时用 CDATA 包裹（否则 XML 解析失败），
+ * 内容中的 `]]>` 拆成两段相邻 CDATA 保持合法。
+ */
+export function codeBlockXml(lang: string, code: string): string {
+  const safeLang = String(lang || "")
+    .replace(/[^a-zA-Z0-9+#._-]/g, "")
+    .toLowerCase();
+  const body = /[<>&]/.test(code)
+    ? `<![CDATA[${code.replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`
+    : code;
+  return `<codeblock${safeLang ? ` lang="${safeLang}"` : ""}>${body}</codeblock>`;
+}
+
+interface FenceInfo {
+  marker: string;
+  lang: string;
+}
+
+function parseFence(line: string): FenceInfo | null {
+  const m = line.match(/^\s*(`{3,}|~{3,})\s*([\w+#.-]*)\s*$/);
+  if (!m) return null;
+  return { marker: m[1], lang: m[2] || "" };
+}
+
+/**
+ * 列表渲染：直接输出 WPS 原生列表段落（`p listType/listLevel`），
+ * 保留嵌套层级；有序列表按「同层级连续项」分配 listId 以便 WPS 编组。
+ * 不输出 `<ul>/<li>`：HTML 列表会被自动转成普通段落，嵌套信息丢失。
+ */
 function renderList(
   lines: string[],
   startIndex: number,
 ): { xml: string; nextIndex: number } {
-  const firstLine = lines[startIndex];
-  const isOrdered = isOrderedListItem(firstLine);
-  const isChecklist = isChecklistItem(firstLine);
-
   const items: string[] = [];
   let i = startIndex;
+  let orderedGroupSeq = 0;
+  let currentListId = "";
+  let currentLevel = -1;
+
   while (i < lines.length) {
     const line = lines[i];
     const isList =
@@ -116,24 +155,33 @@ function renderList(
       isChecklistItem(line);
     if (!isList) break;
 
+    const level = listLevelOf(line);
     const { content, checked } = parseListItem(line);
     const inner = inlineMarkdownToXml(content);
-    if (isChecklist) {
-      // WPS 原生 todo 列表：直接输出 p listType="todo"
+
+    if (isChecklistItem(line)) {
       items.push(
-        `<p listType="todo" listLevel="0" checked="${checked ? 1 : 0}">${inner}</p>`,
+        `<p listType="todo" listLevel="${level}" checked="${checked ? 1 : 0}">${inner}</p>`,
+      );
+      currentListId = "";
+      currentLevel = level;
+    } else if (isOrderedListItem(line)) {
+      if (!currentListId || level !== currentLevel) {
+        currentListId = `ol${orderedGroupSeq++}`;
+        currentLevel = level;
+      }
+      items.push(
+        `<p listType="ordered" listLevel="${level}" listId="${currentListId}">${inner}</p>`,
       );
     } else {
-      items.push(`<li><p>${inner}</p></li>`);
+      items.push(`<p listType="bullet" listLevel="${level}">${inner}</p>`);
+      currentListId = "";
+      currentLevel = level;
     }
     i++;
   }
 
-  if (isChecklist) {
-    return { xml: items.join(""), nextIndex: i };
-  }
-  const tag = isOrdered ? "ol" : "ul";
-  return { xml: `<${tag}>${items.join("")}</${tag}>`, nextIndex: i };
+  return { xml: items.join(""), nextIndex: i };
 }
 
 function renderBlockLatex(
@@ -227,11 +275,9 @@ export function splitMarkdownByTable(md: string): {
     i++;
   }
 
-  const renderLines = (ls: string[]) =>
-    ls
-      .filter((l) => l.trim())
-      .map((l) => `<p>${inlineMarkdownToXml(l)}</p>`)
-      .join("");
+  // 表格前后文本走完整 Markdown 渲染（保留代码块/列表/引用），
+  // 而不是逐行包 <p>
+  const renderLines = (ls: string[]) => markdownToWpsXml(ls.join("\n"));
 
   return {
     before: renderLines(beforeLines),
@@ -252,6 +298,30 @@ export function markdownToWpsXml(md: string): string {
 
   while (i < lines.length) {
     const line = lines[i];
+
+    // 围栏代码块（```lang / ~~~lang）
+    const fence = parseFence(line);
+    if (fence) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length) {
+        const close = parseFence(lines[i]);
+        // 只看标记字符与长度≥开围栏的闭合行
+        if (
+          close &&
+          close.marker[0] === fence.marker[0] &&
+          close.marker.length >= fence.marker.length &&
+          !close.lang
+        ) {
+          i++;
+          break;
+        }
+        codeLines.push(lines[i]);
+        i++;
+      }
+      blocks.push(codeBlockXml(fence.lang, codeLines.join("\n")));
+      continue;
+    }
 
     // 表格块
     if (line.startsWith("|")) {
@@ -274,6 +344,21 @@ export function markdownToWpsXml(md: string): string {
       const listRes = renderList(lines, i);
       blocks.push(listRes.xml);
       i = listRes.nextIndex;
+      continue;
+    }
+
+    // 引用块（连续 `> ` 行合并为单个 blockquote，行间用 <br/>）
+    if (/^\s*>\s?/.test(line)) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        quoteLines.push(lines[i].replace(/^\s*>\s?/, ""));
+        i++;
+      }
+      blocks.push(
+        `<blockquote>${quoteLines
+          .map((l) => inlineMarkdownToXml(l))
+          .join("<br/>")}</blockquote>`,
+      );
       continue;
     }
 

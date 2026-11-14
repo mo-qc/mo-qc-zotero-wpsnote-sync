@@ -13,17 +13,24 @@ import {
   ConflictKind,
 } from "./syncEngine";
 import { getString } from "../utils/locale";
-import { getPref } from "../utils/prefs";
+import { getPref, getCraftConfig } from "../utils/prefs";
 import {
   getAllMappings,
   getMappedEntry,
   getMappedNote,
+  getCraftMappedEntry,
   removeMappedNote,
   recordPullNoteId,
   updateNoteModified,
 } from "./syncMapping";
 import { runWithConcurrency } from "../utils/concurrencyHelper";
 import { semanticXmlToZoteroHtml } from "../utils/semanticRender";
+import { craftMarkdownToZoteroHtml } from "../utils/craftMarkdown";
+import {
+  getCraftClient,
+  extractLastModified,
+  type CraftBlock,
+} from "./craftClient";
 import { getSelectedItems } from "./zoteroItem";
 
 // Zotero 插件环境可能没有全局 AbortController，提供最小 polyfill
@@ -114,10 +121,18 @@ async function promptConflict(
   };
 
   const isWps = kind === "wps";
-  const heading = isWps ? "WPS 笔记已修改" : "文献已变更";
-  const body = isWps
-    ? `文献「${escapeHtml(title.slice(0, 40))}」的 WPS 笔记在上次同步后被手工修改过，可能包含你的心得或批注。<br/>覆盖会丢失这些修改；可先跳过，稍后用右键菜单「从 WPS 拉取」取回。`
-    : `文献「${escapeHtml(title.slice(0, 40))}」在 Zotero 中已变更，可能已同步过到 WPS 笔记。`;
+  const isCraft = kind === "craft";
+  const heading = isCraft
+    ? "Craft 文档已修改"
+    : isWps
+      ? "WPS 笔记已修改"
+      : "文献已变更";
+  const body = isCraft
+    ? `文献「${escapeHtml(title.slice(0, 40))}」的 Craft 文档在上次同步后被手工修改过，可能包含你的心得或批注。<br/>覆盖会丢失这些修改；可先跳过，稍后在 Craft 中手动处理。`
+    : isWps
+      ? `文献「${escapeHtml(title.slice(0, 40))}」的 WPS 笔记在上次同步后被手工修改过，可能包含你的心得或批注。<br/>覆盖会丢失这些修改；可先跳过，稍后用右键菜单「从 WPS 拉取」取回。`
+      : `文献「${escapeHtml(title.slice(0, 40))}」在 Zotero 中已变更，可能已同步过到 WPS 笔记。`;
+  const overwriteLabel = isCraft ? "覆盖 Craft 文档" : "覆盖 WPS 笔记";
 
   const dialog = new (ztoolkit as any).Dialog(2, 1)
     .addCell(0, 0, {
@@ -149,17 +164,20 @@ async function promptConflict(
     })
     .addButton("跳过本次", "skip")
     .addButton("新建副本", "create-copy")
-    .addButton("覆盖 WPS 笔记", "overwrite")
+    .addButton(overwriteLabel, "overwrite")
     .setDialogData(dialogData);
 
-  dialog.open("Zotero → WPS 笔记同步冲突", {
-    width: 440,
-    height: 200,
-    centerscreen: true,
-    resizable: false,
-    fitContent: true,
-    noDialogMode: true,
-  });
+  dialog.open(
+    isCraft ? "Zotero → Craft 文档同步冲突" : "Zotero → WPS 笔记同步冲突",
+    {
+      width: 440,
+      height: 200,
+      centerscreen: true,
+      resizable: false,
+      fitContent: true,
+      noDialogMode: true,
+    },
+  );
 
   await dialog.dialogData.unloadLock!.promise;
 
@@ -1080,11 +1098,92 @@ ${openBtn}<button data-history-action="retry" data-item-key="${escapeHtml(itemKe
  * 不覆盖已有子笔记，避免丢失 Zotero 侧内容。
  * @param itemsArg 指定要拉取的条目；缺省时使用当前选中条目。
  */
+/**
+ * 把 WPS 笔记里的图片块转成可写入 Zotero 的 data URI。
+ *
+ * read_note 返回的 `<img>` 是只读标签，只带 fileID、没有可直接使用的 src，
+ * 直接转换会被 semanticRender 当作无图降级为占位符。
+ *
+ * 对齐方式：优先用 XML 自带的 `<img id>`（即块 id，与 read_image 一一对应，
+ * 不受容器嵌套影响）；老服务端不带 id 时退回 outline 顶层 image 块按序对齐
+ * （嵌套图片会错位，属降级路径）。任何失败均保留原标签（降级为占位）。
+ */
+async function resolveWpsImageSources(
+  client: ReturnType<typeof getClient>,
+  noteId: string,
+  xml: string,
+): Promise<string> {
+  if (!/<img\b/i.test(xml)) return xml;
+  try {
+    const tags = xml.match(/<img\b[^>]*>/gi) || [];
+    const targets = tags
+      .map((tag) => ({
+        tag,
+        id: tag.match(/\bid\s*=\s*["']([^"']*)["']/i)?.[1] || "",
+      }))
+      .filter(({ tag }) => !/\bsrc\s*=\s*["'](?:https?:|data:)/i.test(tag));
+    if (!targets.length) return xml;
+
+    // 带 id 的逐块读取；缺 id 的位置退回 outline 顶层 image 块按序补位
+    let fallbackIds: string[] = [];
+    if (targets.some((t) => !t.id)) {
+      const outline = await client.getNoteOutline(noteId);
+      fallbackIds = (outline?.blocks || [])
+        .filter((b) => String(b.type || "").toLowerCase() === "image" && b.id)
+        .map((b) => b.id);
+    }
+    const blockIdOf = (i: number) => targets[i].id || fallbackIds[i] || "";
+
+    // 单篇最多拉 30 张，避免超大笔记回流把界面卡死；同一块 id 只读一次
+    const urlByIndex = new Map<number, string>();
+    const urlByBlockId = new Map<string, string>();
+    let readCount = 0;
+    for (let i = 0; i < targets.length && readCount < 30; i++) {
+      const blockId = blockIdOf(i);
+      if (!blockId) continue;
+      try {
+        let url = urlByBlockId.get(blockId);
+        if (!url) {
+          const img = await client.readImage(noteId, blockId);
+          url = img.dataUrl;
+          if (url) urlByBlockId.set(blockId, url);
+        }
+        if (url) {
+          urlByIndex.set(i, url);
+          readCount++;
+        }
+      } catch (e: any) {
+        ztoolkit.log(
+          "read_image failed (non-fatal)",
+          noteId,
+          blockId,
+          e?.message || String(e),
+        );
+      }
+    }
+    if (!urlByIndex.size) return xml;
+
+    let index = 0;
+    return xml.replace(/<img\b[^>]*>/gi, (tag) => {
+      const url = urlByIndex.get(index++);
+      if (!url) return tag;
+      const alt = tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1] || "图片";
+      return `<img src="${url}" alt="${alt}"/>`;
+    });
+  } catch (e: any) {
+    ztoolkit.log(
+      "resolveWpsImageSources failed (non-fatal)",
+      e?.message || String(e),
+    );
+    return xml;
+  }
+}
+
 export async function pullFromWps(itemsArg?: Zotero.Item[]) {
   const items = itemsArg?.length ? itemsArg : getSelectedItems();
   if (!items.length) {
     ztoolkit.log("pullFromWps: no items selected");
-    return;
+    return { ok: 0, skipped: 0, failed: 0, started: false };
   }
 
   const popup = new ztoolkit.ProgressWindow("Zotero → WPS 笔记同步");
@@ -1095,7 +1194,7 @@ export async function pullFromWps(itemsArg?: Zotero.Item[]) {
     });
     popup.show();
     popup.startCloseTimer(3000);
-    return;
+    return { ok: 0, skipped: 0, failed: items.length, started: false };
   }
   popup.createLine({
     text: `正在从 WPS 拉取 ${items.length} 篇笔记…`,
@@ -1124,18 +1223,21 @@ export async function pullFromWps(itemsArg?: Zotero.Item[]) {
       }
       try {
         const client = getClient();
-        // 分页读全（长笔记可能跨多页）
+        // 分页读全（长笔记可能跨多页）：偏移以服务端 next_offset 为准，
+        // 避免按请求块数自增导致重复拼接（见 WpsMcpClient.readNote 注释）
         let xml = "";
         let noteTitle = "";
         let offset = 0;
-        for (let page = 0; page < 50; page++) {
-          const r = await client.readNote(mapped.noteId, offset, 50);
+        for (let page = 0; page < 500; page++) {
+          const r = await client.readNote(mapped.noteId, offset, 100);
           if (page === 0) noteTitle = r.title;
           xml += r.content;
-          if (!r.hasMore) break;
-          offset += 50;
+          if (!r.hasMore || r.nextOffset <= offset) break;
+          offset = r.nextOffset;
         }
-        const html = semanticXmlToZoteroHtml(xml);
+        const html = semanticXmlToZoteroHtml(
+          await resolveWpsImageSources(client, mapped.noteId, xml),
+        );
         if (!html.trim()) throw new Error("笔记内容解析为空");
 
         // 复用上次回流写入的子笔记（存在且仍是本条目的子笔记时更新，
@@ -1198,6 +1300,149 @@ export async function pullFromWps(itemsArg?: Zotero.Item[]) {
   popup.startCloseTimer(4000);
   ztoolkit.log(
     `pullFromWps done: ok=${ok} skipped=${skipped} failed=${failed}`,
+  );
+  return { ok, skipped, failed, started: true };
+}
+
+/** 递归收集 Craft 块树的 markdown 内容（顶层在前、深度优先） */
+function collectCraftBlockMarkdown(root: CraftBlock): string {
+  const parts: string[] = [];
+  const walk = (blocks: CraftBlock[] | undefined) => {
+    for (const b of blocks || []) {
+      if (b.markdown) parts.push(String(b.markdown));
+      if (b.content?.length) walk(b.content);
+    }
+  };
+  walk(root.content);
+  return parts.join("\n\n");
+}
+
+/**
+ * 从 Craft 拉取文档内容，写入为该文献的回流子笔记（与 pullFromWps 对称）。
+ * 子笔记复用逻辑同 pullFromWps：重复拉取不会产生重复笔记。
+ * @param itemsArg 指定要拉取的条目；缺省时使用当前选中条目。
+ */
+export async function pullFromCraft(itemsArg?: Zotero.Item[]) {
+  const items = itemsArg?.length ? itemsArg : getSelectedItems();
+  if (!items.length) {
+    ztoolkit.log("pullFromCraft: no items selected");
+    return;
+  }
+
+  const popup = new ztoolkit.ProgressWindow("Zotero → Craft 文档同步");
+  const cfg = getCraftConfig();
+  if (!cfg.link || !cfg.token) {
+    popup.createLine({ text: "Craft 未配置 API link 或 token", type: "fail" });
+    popup.show();
+    popup.startCloseTimer(3000);
+    return;
+  }
+  if (!beginOperation("pull")) {
+    popup.createLine({
+      text: "另一同步/回流操作正在进行，请稍后再试",
+      type: "fail",
+    });
+    popup.show();
+    popup.startCloseTimer(3000);
+    return;
+  }
+  const client = getCraftClient(cfg.link, cfg.token);
+  popup.createLine({
+    text: `正在从 Craft 拉取 ${items.length} 篇文档…`,
+    progress: 0,
+  });
+  popup.show();
+
+  let ok = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  try {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const title = String(item.getField("title") || item.key);
+      const percent = Math.round(((i + 1) / items.length) * 100);
+      const mapped = getCraftMappedEntry(item.key);
+      if (!mapped?.craftDocId) {
+        skipped++;
+        popup.changeLine({
+          progress: percent,
+          text: `跳过（未同步过）：${title.slice(0, 30)}`,
+          type: "warning",
+        });
+        continue;
+      }
+      try {
+        // fetchMetadata 一并带回根块元数据，省掉一次单独的 metadata 请求
+        const root = await client.fetchBlocks(mapped.craftDocId, {
+          maxDepth: 50,
+          fetchMetadata: true,
+        });
+        const markdown = collectCraftBlockMarkdown(root);
+        if (!markdown.trim()) throw new Error("Craft 文档内容为空");
+        const html = craftMarkdownToZoteroHtml(markdown);
+        if (!html.trim()) throw new Error("Craft 内容解析为空");
+
+        // 复用上次回流写入的子笔记（同 pullFromWps，防重复堆积）。
+        // craft-only 条目无 noteId，getMappedEntry 会返回 undefined 导致
+        // 永远读不到 pullNoteId、每次拉取都新建——必须用 Craft 守卫版本
+        let child: Zotero.Item | undefined;
+        const prevPullId = getCraftMappedEntry(item.key)?.pullNoteId;
+        if (prevPullId) {
+          try {
+            const prev = await Zotero.Items.getAsync(Number(prevPullId));
+            if (
+              prev &&
+              !prev.deleted &&
+              prev.isNote() &&
+              prev.parentID === item.id
+            ) {
+              child = prev;
+            }
+          } catch (e) {
+            ztoolkit.log("Load previous pull note failed, will recreate", e);
+          }
+        }
+        if (!child) {
+          child = new Zotero.Item("note");
+          child.parentID = item.id;
+        }
+        child.setNote(html);
+        await child.saveTx();
+        recordPullNoteId(item.key, String(child.id));
+
+        // 刷新改动检测基准（Craft ISO 时间），避免下次轮询误报；
+        // 元数据已随首次 fetchBlocks 返回，直接从 root 提取，不再二次请求
+        try {
+          const lm = String(extractLastModified(root) || "");
+          if (lm) updateNoteModified(item.key, lm);
+        } catch (e) {
+          ztoolkit.log("updateNoteModified failed (non-fatal)", e);
+        }
+
+        ok++;
+        popup.changeLine({
+          progress: percent,
+          text: `已拉取：${title.slice(0, 30)}`,
+          type: "success",
+        });
+      } catch (e: any) {
+        failed++;
+        ztoolkit.log("pullFromCraft failed", item.key, e?.message || String(e));
+        popup.changeLine({
+          progress: percent,
+          text: `失败：${title.slice(0, 25)}`,
+          type: "fail",
+        });
+      }
+    }
+  } finally {
+    endOperation();
+  }
+
+  popup.startCloseTimer(4000);
+  ztoolkit.log(
+    `pullFromCraft done: ok=${ok} skipped=${skipped} failed=${failed}`,
   );
 }
 
@@ -1325,6 +1570,16 @@ export function registerMenus(win: Window) {
     menuIcon,
     () => {
       pullFromWps();
+    },
+  );
+  appendMenuItem(
+    win,
+    "zotero-itemmenu",
+    "zotero-wpsnote-sync-pull-craft-menuitem",
+    getString("menu-pull-from-craft"),
+    menuIcon,
+    () => {
+      pullFromCraft();
     },
   );
   appendMenuItem(
