@@ -140,14 +140,15 @@
     flex-direction: column; gap: 14px; } .zws-tab-bar { display: flex; gap: 4px;
     border-bottom: 1px solid var(--zws-border); } .zws-tab { appearance: none;
     background: none; border: none; border-bottom: 2px solid transparent;
-    padding: 9px 16px; font-size: 13.5px; font-weight: 500; color:
-    var(--zws-text-secondary); cursor: pointer; border-radius: 6px 6px 0 0; }
-    .zws-tab:hover { color: var(--zws-text); background: var(--zws-surface); }
-    .zws-tab.active { color: var(--zws-primary); border-bottom-color:
-    var(--zws-primary); font-weight: 600; } .zws-tab-panel { display: none;
-    flex-direction: column; gap: 14px; } .zws-tab-panel.active { display: flex;
-    } /* 卡片内相邻块统一 16px 间距（置于末尾以覆盖旧 margin） */ .zws-card > *
-    + * { margin-top: var(--zws-gap-md); } /* help 紧贴所属控件： 表单行后 8px
+    height: auto; min-height: 40px; padding: 9px 16px; font-size: 13.5px;
+    font-weight: 500; color: var(--zws-text-secondary); cursor: pointer;
+    border-radius: 6px 6px 0 0; } .zws-tab:hover { color: var(--zws-text);
+    background: var(--zws-surface); } .zws-tab.active { color:
+    var(--zws-primary); border-bottom-color: var(--zws-primary); font-weight:
+    600; } .zws-tab-panel { display: none; flex-direction: column; gap: 14px; }
+    .zws-tab-panel.active { display: flex; } /* 卡片内相邻块统一 16px
+    间距（置于末尾以覆盖旧 margin） */ .zws-card > * + * { margin-top:
+    var(--zws-gap-md); } /* help 紧贴所属控件： 表单行后 8px
     且对齐控件列；复选组后 8px 顶格 */ .zws-form-row + .zws-help-text {
     margin-top: 8px; margin-left: calc(120px + var(--zws-gap-md)); }
     .zws-check-group + .zws-help-text { margin-top: 8px; } /*

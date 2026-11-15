@@ -1,7 +1,31 @@
 import { expect } from "chai";
-import { craftMarkdownToZoteroHtml } from "../src/utils/craftMarkdown";
+import {
+  craftMarkdownToZoteroHtml,
+  formatCraftTag,
+} from "../src/utils/craftMarkdown";
 
 describe("craftMarkdown", function () {
+  describe("formatCraftTag (sync)", function () {
+    it("keeps multi-level tags intact (Craft supports 3+ levels)", function () {
+      expect(formatCraftTag("#化学/电化学/涂层")).to.equal(
+        "#化学/电化学/涂层 ",
+      );
+      expect(formatCraftTag("#a/b/c/d/e")).to.equal("#a/b/c/d/e ");
+      expect(formatCraftTag("#化学/电化学/涂层")).to.not.include(
+        "#化学/电化学-涂层",
+      );
+    });
+
+    it("collapses spaces inside tags to dashes", function () {
+      expect(formatCraftTag("#a b/c")).to.equal("#a-b/c ");
+    });
+
+    it("returns empty string for empty tag", function () {
+      expect(formatCraftTag("")).to.equal("");
+      expect(formatCraftTag("#")).to.equal("");
+    });
+  });
+
   describe("craftMarkdownToZoteroHtml (pull-back)", function () {
     it("keeps last column when trailing pipe is omitted", function () {
       const result = craftMarkdownToZoteroHtml("| a | b\n|---|---\n| 1 | 2");

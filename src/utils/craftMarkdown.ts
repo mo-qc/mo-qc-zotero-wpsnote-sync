@@ -132,27 +132,19 @@ function inlineWalk(node: Node | null, keepNL = false): string {
     }
     case "caption":
       return `<caption>${kids()}</caption>`;
-    case "tag": {
-      // Craft 子标签只支持两级（官方"轻量层级"示例均为 #parent/child，
-      // 3+ 级在 Craft UI 不渲染为标签）。Zotero 层级标签适配：
-      // 1-2 级原样；3+ 级保留父级、其余段用连字符压平（信息不丢、可按父级聚合）
-      const raw = kids().replace(/^#/, "").trim();
-      if (!raw) return "";
-      const segs = raw
-        .split("/")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (!segs.length) return "";
-      const craftTag =
-        segs.length <= 2
-          ? segs.join("/")
-          : `${segs[0]}/${segs.slice(1).join("-")}`;
-      // 尾随空格：相邻 <tag> 元素间需要分隔，否则 #a#b 粘连成一个坏标签
-      return `#${craftTag.replace(/\s+/g, "-")} `;
-    }
+    case "tag":
+      return formatCraftTag(kids());
     default:
       return kids();
   }
+}
+
+/** Craft 标签格式化：去 # 前缀、空格压 -（标签内不能有空格）、补尾随空格（相邻标签分隔，防 #a#b 粘连）。
+ * Craft 已支持多级标签（2026-11 真机验证：3/4/5 级均渲染为标签样式），完整层级原样保留。 */
+export function formatCraftTag(rawWithHash: string): string {
+  const raw = rawWithHash.replace(/^#/, "").trim();
+  if (!raw) return "";
+  return `#${raw.replace(/\s+/g, "-")} `;
 }
 
 function tableToMarkdown(el: Element): string {
