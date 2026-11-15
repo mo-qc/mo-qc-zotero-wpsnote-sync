@@ -17,8 +17,9 @@ import {
   ZoteroNote,
   ZoteroNoteImage,
 } from "../utils/xmlBuilder";
-import { getPref, getMcpConfig, getSyncTarget } from "../utils/prefs";
+import { getPref, getMcpConfig, getSyncTargets } from "../utils/prefs";
 import { syncItemCraft } from "./craftSync";
+import { PARTITION_PHRASE } from "../utils/partition";
 import {
   getMappedEntry,
   getAllMappings,
@@ -84,7 +85,12 @@ export interface SyncResult {
   error?: string;
   errorType?: SyncErrorType;
   errorCode?: number | string;
+  /** WPS 分区 marker 块 id（本次写入后记录，随 recordSyncResult 落映射） */
+  wpsMarkerBlockId?: string;
 }
+
+/** WPS 分区 marker（语义 XML 段落）：短语与 Craft 端一致，标记前 = Zotero 区 */
+const WPS_MARKER_XML = `<p>✍️ ${PARTITION_PHRASE}（Zotero 同步不会覆盖此区域）</p>`;
 
 function collectSyncImages(notes: ZoteroNote[]) {
   return notes.flatMap((note) => note.images);
@@ -130,6 +136,7 @@ async function syncNoteImages(
   noteId: string,
   anchorId: string,
   notes: ZoteroNote[],
+  position: "before" | "after" = "after",
 ) {
   const noteImages = collectSyncImages(notes);
   if (!noteImages.length) return;
@@ -149,7 +156,7 @@ async function syncNoteImages(
     // 先插入一个标题块，作为图片分组的锚点
     const headingRes = await client.editBlock(noteId, "insert", {
       anchor_id: anchorId,
-      position: "after",
+      position,
       content: "<h2>图片</h2>",
     });
     const imageAnchorId =
@@ -379,14 +386,51 @@ export async function syncItem(
   }
 }
 
+/** 双目标结果聚合：全成功取首个结果；有失败则 success=false 并按目标名拼接错误 */
+function mergeSyncResults(
+  results: SyncResult[],
+  targets: ("wps" | "craft")[],
+): SyncResult {
+  const failedIdx = results
+    .map((r, i) => (r.success ? -1 : i))
+    .filter((i) => i >= 0);
+  if (!failedIdx.length) return results[0];
+  const errText = failedIdx
+    .map(
+      (i) =>
+        `${targets[i] === "wps" ? "WPS" : "Craft"}：${results[i].error || "未知错误"}`,
+    )
+    .join("；");
+  return { ...results[failedIdx[0]], success: false, error: errText };
+}
+
 async function syncItemUnlocked(
   item: Zotero.Item,
   options?: SyncOptions,
 ): Promise<SyncResult> {
-  // 同步目标二选一：Craft 走独立执行路径（模板/锁/触发机制共用）
-  if (getSyncTarget() === "craft") {
-    return syncItemCraft(item, options);
+  const targets = getSyncTargets();
+  // 双目标：串行执行各自完整流程（Craft 独立执行路径，模板/锁/触发机制共用），聚合结果
+  if (targets.length > 1) {
+    const results: SyncResult[] = [];
+    for (const t of targets) {
+      results.push(
+        t === "craft"
+          ? await syncItemCraft(item, options)
+          : await syncItemWps(item, options),
+      );
+    }
+    return mergeSyncResults(results, targets);
   }
+  return targets[0] === "craft"
+    ? syncItemCraft(item, options)
+    : syncItemWps(item, options);
+}
+
+/** WPS 目标执行路径（单目标与双目标共用） */
+async function syncItemWps(
+  item: Zotero.Item,
+  options?: SyncOptions,
+): Promise<SyncResult> {
   const result: SyncResult = {
     success: false,
     itemKey: item.key,
@@ -450,6 +494,20 @@ async function syncItemUnlocked(
               String((n as { note_id?: string }).note_id || "") ===
               mappedNoteId,
           );
+        }
+        // 列表/搜索索引可能延迟（真机复现：列表短时间丢条目 → 误判删除、
+        // 误建孤儿笔记）：直读复核——readNote 成功且标题匹配视为仍可见
+        if (!visible && mappedNoteId) {
+          try {
+            const direct = await client.readNote(mappedNoteId, 0, 3);
+            const directTitle = String(
+              (direct as { title?: string }).title || "",
+            );
+            const probe = data.title.slice(0, Math.min(30, data.title.length));
+            if (probe && directTitle.includes(probe)) visible = true;
+          } catch {
+            // 直读失败维持原判定
+          }
         }
       } catch (e) {
         // 校验失败保守沿用映射，避免误建重复笔记
@@ -536,8 +594,16 @@ async function syncItemUnlocked(
       }
     }
 
-    // WPS 端改动检测：上次同步后 WPS 笔记被手工修改（update_time 晚于记录的基准）
-    if (mapped && mappedEntry?.lastSuccess && mappedEntry.noteModified) {
+    // WPS 端改动检测：上次同步后 WPS 笔记被手工修改（update_time 晚于记录的基准）。
+    // 分区就绪（wpsMarkerBlockId 存在）时跳过：marker 后的用户区手改是预期行为
+    // （分区同步本就保留），marker 前的 Zotero 区以 Zotero 为准——与 Craft
+    // 分区就绪跳过检测的语义对等。
+    if (
+      mapped &&
+      mappedEntry?.lastSuccess &&
+      mappedEntry.noteModified &&
+      !mappedEntry.wpsMarkerBlockId
+    ) {
       try {
         const info = await client.getNoteInfo(mapped.noteId);
         const wpsModified = String(info.updateTime || "");
@@ -658,19 +724,53 @@ async function syncItemUnlocked(
     checkCancelled(options?.signal);
 
     // 写入/覆盖内容：
-    // - 如果是新建笔记（只有 1 个初始 block），直接替换首段；
-    // - 如果是更新已有笔记，先删除其余 block，再替换首段，避免内容叠加。
+    // - 新建笔记：替换首段并追加分区 marker，之后同步只重写 marker 前的 Zotero 区；
+    // - 已有笔记：块级分区替换（delete marker 前 + insert），用户笔记区零触碰；
+    //   旧映射无 marker 时回退全量并重建分区（与 Craft no-marker 行为对等）。
+    let imageAnchorId = firstBlockId;
+    let imageAnchorPosition: "before" | "after" = "after";
     if (wasCreated) {
       await client.editBlock(noteId, "replace", {
         block_id: firstBlockId,
         content: xml,
       });
+      // marker 独立 insert（尾部拼接会被 WPS 解析丢弃，真机复现）
+      try {
+        const markerId = await client.appendMarkerBlock(
+          noteId,
+          WPS_MARKER_XML,
+          PARTITION_PHRASE,
+        );
+        if (markerId) {
+          result.wpsMarkerBlockId = markerId;
+          imageAnchorId = markerId;
+          imageAnchorPosition = "before";
+        }
+      } catch (e) {
+        // 写入失败不阻断：下次同步走回退路径重建分区
+        ztoolkit.log("Append WPS marker failed (non-fatal)", e);
+      }
     } else {
-      await client.replaceNoteContent(noteId, xml, outline);
+      const region = await client.replaceZoteroRegion(
+        noteId,
+        xml,
+        PARTITION_PHRASE,
+        WPS_MARKER_XML,
+        outline,
+      );
+      result.wpsMarkerBlockId = region.markerBlockId;
+      imageAnchorId = region.imageAnchorId;
+      imageAnchorPosition = region.imageAnchorPosition;
     }
 
     // 同步 Zotero 笔记中的图片（外网 URL、内嵌 data URL、本地附件转 base64）
-    await syncNoteImages(client, noteId, firstBlockId, data.notes);
+    await syncNoteImages(
+      client,
+      noteId,
+      imageAnchorId,
+      data.notes,
+      imageAnchorPosition,
+    );
 
     // 同步标签（清理非法字符、emoji、超长层级）
     const tagsToAdd = [...data.tags, ...(options?.addTags || [])]
@@ -725,6 +825,7 @@ async function syncItemUnlocked(
     noteUrl: result.noteUrl,
     itemModified,
     noteModified: result.noteModified,
+    wpsMarkerBlockId: result.wpsMarkerBlockId,
     error: result.error,
     errorType: result.errorType,
     errorCode: result.errorCode,

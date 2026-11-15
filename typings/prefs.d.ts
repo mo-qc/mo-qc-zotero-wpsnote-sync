@@ -34,7 +34,8 @@ declare namespace _ZoteroTypes {
       "changePollInterval": number;
       "mcpServerWriteEnabled": boolean;
       "mcpServerToken": string;
-      "syncTarget": string;
+      "syncTargetWps": boolean;
+      "syncTargetCraft": boolean;
       "craftApiLink": string;
       "craftApiToken": string;
       "craftFolderId": string;

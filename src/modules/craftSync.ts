@@ -28,14 +28,16 @@ import {
 import {
   getCraftMappedEntry,
   getAllMappings,
+  getCraftBaseline,
   recordSyncResult,
   removeMappedNote,
 } from "./syncMapping";
 
 const EXTRA_CRAFT_ID_KEY = "ZWS-Craft-Id";
 
-/** 分区标记块内容：标记之前 = Zotero 区（同步器独占），之后 = 用户笔记区（永不覆盖） */
-const PARTITION_PHRASE = "以下为我的笔记";
+/** 分区标记块内容：标记之前 = Zotero 区（同步器独占），之后 = 用户笔记区（永不覆盖）。
+ *  短语来自共享 partition 模块（与 WPS 分区一致，避免循环依赖）。 */
+import { PARTITION_PHRASE } from "../utils/partition";
 const PARTITION_MARKER_MARKDOWN = `---\n\n**✍️ ${PARTITION_PHRASE}**（Zotero 同步不会覆盖此区域）`;
 
 /**
@@ -307,14 +309,16 @@ export async function replaceDocumentContent(
       return { markerBlockId: marker.id };
     }
     // 匹配率不足（模板大改/结构漂移）→ 回退 P0 全量分区替换
+    // 先插后删（同无标记路径的保底顺序）：插入失败（400/断网）时旧内容仍在，
+    // 不会留下只剩 marker 的空 Zotero 区；先删后插一旦插入失败正文即丢
     const oldIds = blocks.slice(0, markerIdx).map((b) => b.id);
-    await deleteBlocksWithRecheck(client, docId, oldIds);
     if (markdown.trim()) {
       await client.insertBlocks(docId, markdown, {
         position: "before",
         siblingId: marker.id,
       });
     }
+    await deleteBlocksWithRecheck(client, docId, oldIds);
     return { markerBlockId: marker.id };
   }
 
@@ -472,7 +476,7 @@ export async function syncItemCraft(
 
     // 增量跳过：文献未变更（纯本地判断，先行返回避免逐条远端校验的请求开销；
     // Craft 端手改检测由 changePoller 轮询兜底，条目实际变更时仍走完整流程）。
-    // 要求 noteModified 基准存在：老映射基准缺失时跳过会让轮询永远无法检测该条
+    // 要求 craft 基准存在：老映射基准缺失时跳过会让轮询永远无法检测该条
     // （轮询 filter 要求基准），走一次完整同步补上基准后恢复零请求跳过
     const incrementalSync =
       options?.incrementalSync ?? Boolean(getPref("incrementalSync"));
@@ -481,7 +485,7 @@ export async function syncItemCraft(
       docId &&
       mappedEntry?.lastSuccess &&
       mappedEntry.itemModified &&
-      mappedEntry.noteModified &&
+      getCraftBaseline(mappedEntry) &&
       mappedEntry.itemModified === itemModified
     ) {
       ztoolkit.log("Incremental craft sync: skip unchanged", item.key);
@@ -548,7 +552,7 @@ export async function syncItemCraft(
         noteUrl: mappedEntry.noteUrl,
         itemModified,
         // 存在性校验已拿到的远端现状即新基准（Craft 区手改不再触发冲突）
-        ...(remoteModified ? { noteModified: remoteModified } : {}),
+        ...(remoteModified ? { craftNoteModified: remoteModified } : {}),
         contentHash,
         markerBlockId: mappedEntry.markerBlockId,
       });
@@ -561,23 +565,24 @@ export async function syncItemCraft(
 
     // Craft 侧改动检测：上次同步后 Craft 文档被手工修改（lastModifiedAt 晚于记录基准）。
     // 仅在条目实际变更、走完整流程时执行；条目未变的增量跳过场景由 changePoller 轮询兜底。
-    // noteModified 为 WPS 数字时间戳（目标切换场景）时 Date.parse 得 NaN，保守不触发。
+    // craft 基准缺失（老映射存的是 WPS 数字时间戳）时条件不满足，保守不触发。
     // 分区就绪（markerBlockId 存在）时跳过检测：标记后的用户笔记区手改是预期行为，
     // 标记前的 Zotero 区本就以 Zotero 为准会被安全覆盖，两者都不构成冲突
+    const craftBaseline = mappedEntry ? getCraftBaseline(mappedEntry) : "";
     if (
       docId &&
       mappedEntry?.lastSuccess &&
-      mappedEntry.noteModified &&
+      craftBaseline &&
       remoteModified &&
       !mappedEntry.markerBlockId
     ) {
-      const prev = Date.parse(mappedEntry.noteModified);
+      const prev = Date.parse(craftBaseline);
       const curr = Date.parse(remoteModified);
       if (!Number.isNaN(prev) && !Number.isNaN(curr) && curr > prev) {
         ztoolkit.log(
           "Craft-side modification detected",
           item.key,
-          mappedEntry.noteModified,
+          craftBaseline,
           "->",
           remoteModified,
         );
@@ -592,7 +597,7 @@ export async function syncItemCraft(
             result.success = true;
             result.noteId = docId;
             result.noteUrl = mappedEntry.noteUrl;
-            // skip 后对齐 noteModified 基准（Craft 端现状即新基准）：
+            // skip 后对齐 craft 基准（Craft 端现状即新基准）：
             // 不更新会让每次同步都重复弹同一处 Craft 侧改动冲突。
             // itemModified 不动——条目侧变更尚未处理，下次同步仍会正常提示
             recordSyncResult(item.key, {
@@ -600,7 +605,7 @@ export async function syncItemCraft(
               title: data.title,
               craftDocId: docId,
               noteUrl: mappedEntry.noteUrl,
-              noteModified: remoteModified,
+              craftNoteModified: remoteModified,
             });
             return result;
           }
@@ -634,14 +639,14 @@ export async function syncItemCraft(
           result.noteUrl = mappedEntry.noteUrl;
           // skip 后对齐 itemModified（本次已知晓条目变更并选择跳过），
           // 否则条目时间恒晚于基准，每次同步都重复弹同一处冲突；
-          // noteModified 不动——Craft 端未写入，改动检测语义保持
+          // craft 基准不动——Craft 端未写入，改动检测语义保持
           recordSyncResult(item.key, {
             success: true,
             title: data.title,
             craftDocId: docId,
             noteUrl: mappedEntry.noteUrl,
             itemModified,
-            noteModified: mappedEntry.noteModified,
+            ...(craftBaseline ? { craftNoteModified: craftBaseline } : {}),
           });
           return result;
         }
@@ -699,6 +704,16 @@ export async function syncItemCraft(
       docId = doc.id;
       wasCreated = true;
       ztoolkit.log("Created craft document", item.key, docId, title);
+      // 正文写入可能失败（如 Craft 拒绝解析 markdown）：先持久化 docId，
+      // 下次同步复用该文档而不是再新建一个空标题文档（否则每次失败堆一个）
+      recordSyncResult(item.key, {
+        success: false,
+        title: data.title,
+        craftDocId: docId,
+        error: "文档已创建，正文写入失败待重试",
+        errorType: "mcp",
+      });
+      await writeCraftDocIdToExtra(item, docId);
     }
 
     // 写入。映射文档在回收站时可读不可写（存在性校验的 fetchBlocks 照常 200，
@@ -730,6 +745,15 @@ export async function syncItemCraft(
         }
         docId = doc.id;
         wasCreated = true;
+        // 同新建分支：写入前先持久化，防写入失败时下次再堆一个文档
+        recordSyncResult(item.key, {
+          success: false,
+          title: data.title,
+          craftDocId: docId,
+          error: "回收站文档已重建，正文写入失败待重试",
+          errorType: "mcp",
+        });
+        await writeCraftDocIdToExtra(item, docId);
         const replaced = await replaceDocumentContent(client, docId, markdown);
         newMarkerId = replaced.markerBlockId;
       } else {
@@ -740,9 +764,9 @@ export async function syncItemCraft(
     const craftModified = await fetchDocModified(client, docId);
     // 写入后立读可能拿到 Craft 端尚未更新的旧时间：基准必须单调递增，
     // 读到早于旧基准的时间时保留旧基准，防止基准回退导致每次同步误报改动。
-    // Date.parse 对非 ISO（WPS 数字时间戳）返回 NaN，比较不成立，天然不触发
+    // 旧基准非 ISO（WPS 数字时间戳）时 getCraftBaseline 返回空，比较不成立，天然不触发
     let effectiveModified = craftModified;
-    const prevModified = mappedEntry?.noteModified;
+    const prevModified = mappedEntry ? getCraftBaseline(mappedEntry) : "";
     if (
       craftModified &&
       prevModified &&
@@ -759,7 +783,7 @@ export async function syncItemCraft(
       noteUrl,
       itemModified,
       // 读取失败（空串）时不传，避免空值覆盖既有基准
-      ...(effectiveModified ? { noteModified: effectiveModified } : {}),
+      ...(effectiveModified ? { craftNoteModified: effectiveModified } : {}),
       contentHash,
       ...(newMarkerId ? { markerBlockId: newMarkerId } : {}),
     });

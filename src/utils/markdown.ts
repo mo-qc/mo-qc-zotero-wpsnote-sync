@@ -33,14 +33,18 @@ function inlineMarkdownToXml(text: string): string {
   });
 
   // 斜体 *text* / _text_
+  // _ 要求词边界：snake_case（some_var_name）不得被误转为斜体
   result = result.replace(/\*(.+?)\*/g, (_, p1) => {
     placeholders.push(`<em>${escapeXml(p1)}</em>`);
     return `${PLACEHOLDER}${placeholders.length - 1}${PLACEHOLDER}`;
   });
-  result = result.replace(/_(.+?)_/g, (_, p1) => {
-    placeholders.push(`<em>${escapeXml(p1)}</em>`);
-    return `${PLACEHOLDER}${placeholders.length - 1}${PLACEHOLDER}`;
-  });
+  result = result.replace(
+    /(^|[^\w])_(\S[^_\n]*\S|\S)_(?=[^\w]|$)/gm,
+    (_, lead: string, p1: string) => {
+      placeholders.push(`<em>${escapeXml(p1)}</em>`);
+      return `${lead}${PLACEHOLDER}${placeholders.length - 1}${PLACEHOLDER}`;
+    },
+  );
 
   // 链接 [text](url)
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, p1, p2) => {
@@ -217,14 +221,38 @@ function renderBlockLatex(
   return { xml: "", nextIndex: startIndex };
 }
 
+/**
+ * 表格行分割：支持 GFM 尾 | 可选（缺尾 | 不丢最后一列），
+ * 且 `\|` 转义管道不作为分隔符（还原为字面 |）。
+ */
+function splitTableRow(line: string): string[] {
+  const cells: string[] = [];
+  let buf = "";
+  for (let k = 0; k < line.length; k++) {
+    const ch = line[k];
+    if (ch === "\\" && line[k + 1] === "|") {
+      buf += "|";
+      k++;
+      continue;
+    }
+    if (ch === "|") {
+      cells.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  cells.push(buf);
+  // 行首 | 与行尾 | 产生的空边界去掉（中间空单元格保留）
+  if (cells.length && cells[0].trim() === "") cells.shift();
+  if (cells.length && cells[cells.length - 1].trim() === "") cells.pop();
+  return cells.map((c) => c.trim());
+}
+
 function parseMarkdownTable(lines: string[]): string {
   const rows = lines
     .filter((l) => !isTableDelimiter(l))
-    .map((l) => {
-      const cells = l.split("|");
-      // Markdown 表格行以 | 开头和结尾，split 后首尾为空字符串
-      return cells.slice(1, -1).map((c) => c.trim());
-    });
+    .map((l) => splitTableRow(l));
 
   if (rows.length === 0) return "";
 

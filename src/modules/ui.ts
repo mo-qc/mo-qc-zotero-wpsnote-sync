@@ -13,7 +13,7 @@ import {
   ConflictKind,
 } from "./syncEngine";
 import { getString } from "../utils/locale";
-import { getPref, getCraftConfig } from "../utils/prefs";
+import { getPref, getCraftConfig, getSyncTargetsLabel } from "../utils/prefs";
 import {
   getAllMappings,
   getMappedEntry,
@@ -187,8 +187,9 @@ async function promptConflict(
     skip: "skip",
     "create-copy": "create-copy",
   };
-  const resolution =
-    mapping[dialog.dialogData._lastButtonId || ""] || "overwrite";
+  // 关闭对话框（点 X）时 _lastButtonId 为空：默认跳过而非覆盖——
+  // 远端手改可能含用户心得，overwrite 不可逆，skip 可稍后重同步
+  const resolution = mapping[dialog.dialogData._lastButtonId || ""] || "skip";
   if (dialog.dialogData.remember) {
     conflictBatchChoice = resolution;
   }
@@ -1416,7 +1417,9 @@ export async function pullFromCraft(itemsArg?: Zotero.Item[]) {
         // 元数据已随首次 fetchBlocks 返回，直接从 root 提取，不再二次请求
         try {
           const lm = String(extractLastModified(root) || "");
-          if (lm) updateNoteModified(item.key, lm);
+          // 必须写 craft 基准：漏传 target 会把 Craft ISO 写进 WPS 基准，
+          // 导致轮询误报 Craft 冲突、且 WPS 变更检测被污染
+          if (lm) updateNoteModified(item.key, lm, "craft");
         } catch (e) {
           ztoolkit.log("updateNoteModified failed (non-fatal)", e);
         }
@@ -1456,7 +1459,9 @@ export async function runSync(force = false) {
     closeTime: -1,
   })
     .createLine({
-      text: getString("sync-begin"),
+      text: getString("sync-begin", {
+        args: { target: getSyncTargetsLabel() },
+      }),
       type: "default",
       progress: 0,
     })
@@ -1540,14 +1545,58 @@ function appendMenuItem(
   menuRegistrations.push({ win, id });
 }
 
+/**
+ * 在 popup 里建一个带独立 menupopup 的子菜单，返回其 menupopup id。
+ * 失败（父 popup 不存在）返回 null，调用方可降级平铺到原 popup。
+ */
+function appendMenuSubmenu(
+  win: Window,
+  popupId: string,
+  menuId: string,
+  submenuPopupId: string,
+  label: string,
+  icon: string,
+): string | null {
+  const doc = win.document;
+  const popup = doc.getElementById(popupId);
+  if (!popup) {
+    ztoolkit.log("Menu popup not found", popupId);
+    return null;
+  }
+  doc.getElementById(menuId)?.remove();
+  const menu = doc.createXULElement("menu");
+  menu.setAttribute("id", menuId);
+  menu.setAttribute("label", label);
+  if (icon) menu.setAttribute("image", icon);
+  const subPopup = doc.createXULElement("menupopup");
+  subPopup.setAttribute("id", submenuPopupId);
+  menu.appendChild(subPopup);
+  popup.appendChild(menu);
+  menuRegistrations.push({ win, id: menuId });
+  return submenuPopupId;
+}
+
 export function registerMenus(win: Window) {
   const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon@0.5x.png`;
+  // 菜单在窗口注册时求值一次：设置页改勾选后新开窗口/重启生效
+  const targetLabel = getSyncTargetsLabel();
+
+  // 条目右键：4 项收进子菜单；子菜单建失败时降级平铺
+  const itemPopup =
+    appendMenuSubmenu(
+      win,
+      "zotero-itemmenu",
+      "zotero-wpsnote-sync-menu",
+      "zotero-wpsnote-sync-submenu-popup",
+      getString("menu-submenu-title"),
+      menuIcon,
+    ) ?? "zotero-itemmenu";
 
   appendMenuItem(
     win,
-    "zotero-itemmenu",
+    itemPopup,
     "zotero-wpsnote-sync-menuitem",
-    getString("menu-sync-to-wpsnote"),
+    getString("menu-sync-to", { args: { target: targetLabel } }),
     menuIcon,
     () => {
       runSync();
@@ -1555,9 +1604,9 @@ export function registerMenus(win: Window) {
   );
   appendMenuItem(
     win,
-    "zotero-itemmenu",
+    itemPopup,
     "zotero-wpsnote-sync-force-menuitem",
-    getString("menu-force-sync-to-wpsnote"),
+    getString("menu-force-sync-to-wpsnote", { args: { target: targetLabel } }),
     menuIcon,
     () => {
       runSync(true);
@@ -1565,7 +1614,7 @@ export function registerMenus(win: Window) {
   );
   appendMenuItem(
     win,
-    "zotero-itemmenu",
+    itemPopup,
     "zotero-wpsnote-sync-pull-menuitem",
     getString("menu-pull-from-wpsnote"),
     menuIcon,
@@ -1575,7 +1624,7 @@ export function registerMenus(win: Window) {
   );
   appendMenuItem(
     win,
-    "zotero-itemmenu",
+    itemPopup,
     "zotero-wpsnote-sync-pull-craft-menuitem",
     getString("menu-pull-from-craft"),
     menuIcon,
@@ -1583,11 +1632,25 @@ export function registerMenus(win: Window) {
       pullFromCraft();
     },
   );
+
+  // 文件夹右键：2 项收进同名子菜单
+  const collectionPopup =
+    appendMenuSubmenu(
+      win,
+      "zotero-collectionmenu",
+      "zotero-wpsnote-sync-collection-menu",
+      "zotero-wpsnote-sync-collection-submenu-popup",
+      getString("menu-submenu-title"),
+      menuIcon,
+    ) ?? "zotero-collectionmenu";
+
   appendMenuItem(
     win,
-    "zotero-collectionmenu",
+    collectionPopup,
     "zotero-wpsnote-sync-collection-menuitem",
-    getString("menu-sync-collection-to-wpsnote"),
+    getString("menu-sync-collection-to-wpsnote", {
+      args: { target: targetLabel },
+    }),
     menuIcon,
     () => {
       runSync();
@@ -1595,9 +1658,11 @@ export function registerMenus(win: Window) {
   );
   appendMenuItem(
     win,
-    "zotero-collectionmenu",
+    collectionPopup,
     "zotero-wpsnote-sync-force-collection-menuitem",
-    getString("menu-force-sync-collection-to-wpsnote"),
+    getString("menu-force-sync-collection-to-wpsnote", {
+      args: { target: targetLabel },
+    }),
     menuIcon,
     () => {
       runSync(true);
@@ -1613,6 +1678,44 @@ export function registerMenus(win: Window) {
       openSyncHistory();
     },
   );
+
+  // 同步目标文案实时化：targetLabel 只在菜单注册时求值一次，
+  // 用户在设置页改勾选后菜单仍显示旧目标（误以为勾选无效）。
+  // 挂 popupshowing 每次打开菜单时按当前勾选重算 4 个同步项 label。
+  const refreshSyncMenuLabels = () => {
+    const target = getSyncTargetsLabel();
+    const pairs: Array<[string, string]> = [
+      [
+        "zotero-wpsnote-sync-menuitem",
+        getString("menu-sync-to", { args: { target } }),
+      ],
+      [
+        "zotero-wpsnote-sync-force-menuitem",
+        getString("menu-force-sync-to-wpsnote", { args: { target } }),
+      ],
+      [
+        "zotero-wpsnote-sync-collection-menuitem",
+        getString("menu-sync-collection-to-wpsnote", { args: { target } }),
+      ],
+      [
+        "zotero-wpsnote-sync-collection-force-menuitem",
+        getString("menu-force-sync-collection-to-wpsnote", {
+          args: { target },
+        }),
+      ],
+    ];
+    for (const [id, label] of pairs) {
+      win.document.getElementById(id)?.setAttribute("label", label);
+    }
+  };
+  for (const popupId of [itemPopup, collectionPopup]) {
+    const popup = win.document.getElementById(popupId);
+    if (!popup) continue;
+    const prev = (popup as any).__zwsLabelRefresh as EventListener | undefined;
+    if (prev) popup.removeEventListener("popupshowing", prev);
+    (popup as any).__zwsLabelRefresh = refreshSyncMenuLabels;
+    popup.addEventListener("popupshowing", refreshSyncMenuLabels);
+  }
 }
 
 export function unregisterMenus(win?: Window) {

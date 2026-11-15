@@ -76,6 +76,18 @@ function inlineWalk(node: Node | null, keepNL = false): string {
     }
     case "br":
       return "\n";
+    case "p":
+    case "h1":
+    case "h2":
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6":
+    case "blockquote":
+    case "div":
+      // 行内遍历遇到块级子元素：补换行分隔，否则表格单元格内多段落会粘连
+      // （escapeMdText 随后把 \n 压成空格，正好变成段间空格）
+      return kids() + "\n";
     case "img": {
       const src = el.getAttribute("src") || "";
       const alt = el.getAttribute("alt") || "图片";
@@ -111,10 +123,11 @@ function inlineWalk(node: Node | null, keepNL = false): string {
         if (core)
           return `${lead}<highlight color="${hl}">${core}</highlight>${trail}`;
       }
-      // Craft 不支持行内文字色，fontColor 翻译为 caption 灰字
-      // （模板侧 WPS 用 fontColor 表达灰字，此处做双端语义翻译）
+      // Craft 行内文字色用同色渐变 highlight 表达（`#x;#x;g`）：
+      // 文档明确 "Gradients color the text rather than its background"
       const fc = (el.getAttribute("fontColor") || "").trim();
-      if (fc && text.trim()) return `<caption>${text}</caption>`;
+      if (fc && text.trim() && /^#[0-9a-fA-F]{3,8}$/.test(fc))
+        return `<highlight color="${fc};${fc};g">${text}</highlight>`;
       return text;
     }
     case "caption":
@@ -149,12 +162,56 @@ function tableToMarkdown(el: Element): string {
   rows.forEach((tr, idx) => {
     const cells = (Array.from(tr.children) as HTMLElement[])
       .filter((c) => ["td", "th"].includes(c.tagName.toLowerCase()))
-      .map((c) => escapeMdText(inlineWalk(c).trim()));
+      .map((c) =>
+        escapeMdText(
+          fixCellHighlightSpacing(inlineWalk(sanitizeTableCell(c)).trim()),
+        ),
+      );
     if (!cells.length) return;
     lines.push(`| ${cells.join(" | ")} |`);
     if (idx === 0) lines.push(`| ${cells.map(() => "---").join(" | ")} |`);
   });
   return lines.length ? `${lines.join("\n")}\n\n` : "";
+}
+
+/**
+ * Craft 表格单元格限制（真机 400 MARKDOWN_PARSING_ERROR 实测）：
+ * - highlight 只能单层，不能嵌套；
+ * - highlight 内不能含 markdown 强调（**粗体** 等）；
+ * - 单元格完全无 highlight 时裸 markdown（粗体/链接）合法。
+ * 因此有颜色的单元格：只保留文档序最外层颜色（行底色优先于标签色），
+ * 内层降为纯文本，并 unwrap 全部强调标签。
+ */
+function sanitizeTableCell(c: HTMLElement): HTMLElement {
+  const clone = c.cloneNode(true) as HTMLElement;
+  const colored = clone.querySelectorAll(
+    "span[fontHighlightColor],span[highlightColor],span[fontColor],font[fontColor]",
+  );
+  if (!colored.length) return clone;
+  for (let i = 1; i < colored.length; i++) {
+    colored[i].removeAttribute("fontHighlightColor");
+    colored[i].removeAttribute("highlightColor");
+    colored[i].removeAttribute("fontColor");
+  }
+  const emTags = Array.from(
+    clone.querySelectorAll("strong,b,em,i"),
+  ) as HTMLElement[];
+  for (const t of emTags) {
+    const parent = t.parentNode;
+    if (!parent) continue;
+    while (t.firstChild) parent.insertBefore(t.firstChild, t);
+    parent.removeChild(t);
+  }
+  return clone;
+}
+
+/**
+ * Craft 表格单元格另一限制（真机 400 实测）：`</highlight>` 闭合后紧跟
+ * 非空白文本会被判 "non-inline content"，补一个空格即可；后跟标签（<）
+ * 或已有空白时不处理，避免引入多余空格。
+ */
+function fixCellHighlightSpacing(s: string): string {
+  return s.replace(/<\/highlight>(?=[^\s<])/g, "</highlight> ");
 }
 
 /** 列表递归渲染：每层缩进 2 空格（Craft 规则 2 leading spaces = 1 级） */
@@ -399,10 +456,16 @@ function mdInlineToHtml(s: string): string {
   // 受信 HTML 标签 → Zotero note 等价标签（先替换，避免后续裸 < 转义误伤）
   t = t.replace(
     /<highlight color="([^"]*)">([\s\S]*?)<\/highlight>/gi,
-    (_m, c: string, inner: string) =>
-      /^#[0-9a-fA-F]{3,8}$/.test(c)
-        ? `<span style="background-color:${c}">${inner}</span>`
-        : inner,
+    (_m, c: string, inner: string) => {
+      if (/^#[0-9a-fA-F]{3,8}$/.test(c))
+        return `<span style="background-color:${c}">${inner}</span>`;
+      // 渐变 `#a;#a;g` = Craft 同色文字渐变 → Zotero 字色（取首色，Zotero 无渐变）
+      const gm = c.match(
+        /^(#[0-9a-fA-F]{3,8})\s*;\s*#[0-9a-fA-F]{3,8}\s*;\s*g$/i,
+      );
+      if (gm) return `<span style="color:${gm[1]}">${inner}</span>`;
+      return inner;
+    },
   );
   t = t.replace(
     /<caption>([\s\S]*?)<\/caption>/gi,
@@ -436,7 +499,7 @@ function isMdSpecialLine(l: string): boolean {
     /^(#{1,6})\s+/.test(l) ||
     /^```/.test(l) ||
     /^>\s?/.test(l) ||
-    /^\|.*\|\s*$/.test(l) ||
+    /^\|/.test(l) ||
     /^<callout>/i.test(l.trim()) ||
     /^(?:---+|\*{3,})\s*$/.test(l) ||
     /^(\s*)([-*]|\d+\.)\s+/.test(l)
@@ -488,6 +551,30 @@ function parseMdList(
   }
   html += ordered ? "</ol>" : "</ul>";
   return { html, next: idx };
+}
+
+/** 表格行分割：尾 | 可选 + `\|` 转义保护（与 markdown.ts 的 WPS 方向同语义） */
+function splitCraftTableRow(line: string): string[] {
+  const cells: string[] = [];
+  let buf = "";
+  for (let k = 0; k < line.length; k++) {
+    const ch = line[k];
+    if (ch === "\\" && line[k + 1] === "|") {
+      buf += "|";
+      k++;
+      continue;
+    }
+    if (ch === "|") {
+      cells.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  cells.push(buf);
+  if (cells.length && cells[0].trim() === "") cells.shift();
+  if (cells.length && cells[cells.length - 1].trim() === "") cells.pop();
+  return cells.map((c) => c.trim());
 }
 
 /** 将 Craft Markdown（本插件生成或 Craft 手写）转换为 Zotero note HTML */
@@ -568,12 +655,12 @@ export function craftMarkdownToZoteroHtml(md: string): string {
       continue;
     }
 
-    // 表格（首行 |…| + 分隔行）
-    if (/^\|.*\|\s*$/.test(line)) {
+    // 表格（行以 | 开头；尾 | 可选——GFM 允许省略，缺尾 | 不得丢最后一列；
+    // `\|` 转义管道不作分隔符）
+    if (/^\|/.test(line.trim())) {
       const rows: string[][] = [];
-      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) {
-        const raw = lines[i].trim().replace(/^\|/, "").replace(/\|$/, "");
-        rows.push(raw.split("|").map((c) => c.trim().replace(/\\\|/g, "|")));
+      while (i < lines.length && /^\|/.test(lines[i].trim())) {
+        rows.push(splitCraftTableRow(lines[i].trim()));
         i++;
       }
       const hasSep =

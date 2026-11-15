@@ -10,12 +10,15 @@ const PREF_KEY = "syncMapping";
 export interface SyncMappingEntry {
   noteId?: string;
   noteUrl?: string;
-  /** Craft 目标：documentId（与 WPS noteId 并存，二选一目标切换时互不覆盖） */
+  /** Craft 目标：documentId（与 WPS noteId 并存，双目标同时同步时互不覆盖） */
   craftDocId?: string;
   title?: string;
   lastSync: number;
   itemModified?: string;
+  /** WPS 端修改时间基准（数字时间戳） */
   noteModified?: string;
+  /** Craft 端修改时间基准（ISO 时间）：与 noteModified 分离，双目标同时开时互不覆盖 */
+  craftNoteModified?: string;
   lastSuccess?: boolean;
   lastError?: string;
   lastErrorType?: string;
@@ -26,6 +29,19 @@ export interface SyncMappingEntry {
   contentHash?: string;
   /** Craft 分区标记块 id：标记之前为 Zotero 区（同步器独占），之后为用户笔记区（永不覆盖） */
   markerBlockId?: string;
+  /** WPS 分区标记块 id：与 Craft markerBlockId 并存，双目标同时开时互不覆盖 */
+  wpsMarkerBlockId?: string;
+}
+
+/**
+ * Craft 端修改时间基准：优先 craftNoteModified；兼容旧数据——
+ * 早期 Craft 同步复用 noteModified 存 ISO 时间，仅当其为 ISO 格式时回退采用。
+ * （WPS 数字时间戳回退返回空串，表示无基准 → 走完整同步重建）
+ */
+export function getCraftBaseline(entry: SyncMappingEntry): string {
+  if (entry.craftNoteModified) return entry.craftNoteModified;
+  const legacy = String(entry.noteModified || "");
+  return /^\d{4}-\d{2}-\d{2}T/.test(legacy) ? legacy : "";
 }
 
 export interface SyncMapping {
@@ -105,11 +121,13 @@ export function recordSyncResult(
     craftDocId?: string;
     itemModified?: string;
     noteModified?: string;
+    craftNoteModified?: string;
     error?: string;
     errorType?: string;
     errorCode?: number | string;
     contentHash?: string;
     markerBlockId?: string;
+    wpsMarkerBlockId?: string;
   },
 ): void {
   const mapping = loadMapping();
@@ -139,11 +157,17 @@ export function recordSyncResult(
   if (result.noteModified !== undefined) {
     entry.noteModified = result.noteModified;
   }
+  if (result.craftNoteModified !== undefined) {
+    entry.craftNoteModified = result.craftNoteModified;
+  }
   if (result.contentHash !== undefined) {
     entry.contentHash = result.contentHash;
   }
   if (result.markerBlockId !== undefined) {
     entry.markerBlockId = result.markerBlockId;
+  }
+  if (result.wpsMarkerBlockId !== undefined) {
+    entry.wpsMarkerBlockId = result.wpsMarkerBlockId;
   }
   mapping[itemKey] = entry;
   saveMapping(mapping);
@@ -155,12 +179,20 @@ export function removeMappedNote(itemKey: string): void {
   saveMapping(mapping);
 }
 
-/** 只更新端修改时间基准，不动同步状态（回流拉取后调用；WPS/Craft 共用 noteModified 字段） */
-export function updateNoteModified(itemKey: string, noteModified: string) {
+/** 只更新端修改时间基准，不动同步状态（回流拉取后调用；按目标写各自字段，双目标互不覆盖） */
+export function updateNoteModified(
+  itemKey: string,
+  noteModified: string,
+  target: "wps" | "craft" = "wps",
+) {
   const mapping = loadMapping();
   const entry = mapping[itemKey];
   if (!entry?.noteId && !entry?.craftDocId) return;
-  entry.noteModified = noteModified;
+  if (target === "craft") {
+    entry.craftNoteModified = noteModified;
+  } else {
+    entry.noteModified = noteModified;
+  }
   mapping[itemKey] = entry;
   saveMapping(mapping);
 }

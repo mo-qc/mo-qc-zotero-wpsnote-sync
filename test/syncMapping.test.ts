@@ -137,4 +137,23 @@ describe("syncMapping", function () {
     expect(entry?.lastSync).to.equal(before);
     expect(entry?.lastSuccess).to.equal(true);
   });
+
+  it("records and preserves wpsMarkerBlockId independently of craft marker", function () {
+    recordSyncResult("ITEM1", {
+      success: true,
+      noteId: "NOTE1",
+      craftDocId: "DOC1",
+      markerBlockId: "craft-marker",
+      wpsMarkerBlockId: "wps-marker",
+    });
+    let entry = getMappedEntry("ITEM1");
+    expect(entry?.markerBlockId).to.equal("craft-marker");
+    expect(entry?.wpsMarkerBlockId).to.equal("wps-marker");
+
+    // 后续同步结果不带 marker 字段时，已有值保留（undefined 不覆盖）
+    recordSyncResult("ITEM1", { success: true, noteId: "NOTE1" });
+    entry = getMappedEntry("ITEM1");
+    expect(entry?.markerBlockId).to.equal("craft-marker");
+    expect(entry?.wpsMarkerBlockId).to.equal("wps-marker");
+  });
 });

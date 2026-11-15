@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { renderItemTemplate } from "../src/utils/template";
+import { renderItemTemplate, TEMPLATE_PRESETS } from "../src/utils/template";
 import { buildNoteXml } from "../src/utils/xmlBuilder";
 import type { ZoteroItemData } from "../src/utils/xmlBuilder";
 
@@ -71,6 +71,31 @@ describe("renderItemTemplate", function () {
     const item = makeItem();
     const result = buildNoteXml(item);
     expect(result).to.include("Example Title");
+  });
+
+  it("renders the PaperNote preset with meta table and sections", function () {
+    const preset = TEMPLATE_PRESETS.find((p) => p.id === "papernote");
+    expect(preset, "papernote preset exists").to.exist;
+    const item = makeItem({
+      zoteroLink: "zotero://open-pdf/library/items/K1",
+    });
+    const result = renderItemTemplate(preset!.bodyTemplate, item);
+    // 元数据表格：作者行、期刊红字、Local Link、DOI、摘要、标签
+    expect(result).to.include("<table>");
+    expect(result).to.include("Author:");
+    expect(result).to.include('fontColor="#FF0000">Journal of Examples');
+    expect(result).to.include('href="zotero://open-pdf/library/items/K1"');
+    expect(result).to.include("DOI:");
+    expect(result).to.include("Abstract:");
+    expect(result).to.include("#tag1");
+    // 三分区阅读骨架
+    expect(result).to.include("Research Core");
+    expect(result).to.include("Research Content");
+    expect(result).to.include("Personal Summary");
+    expect(result).to.include("Thought Inspiration");
+    // 交替行底色
+    expect(result).to.include('fontHighlightColor="#DBEEDD"');
+    expect(result).to.include('fontHighlightColor="#F3FAF4"');
   });
 
   it("supports hyphenated variable names", function () {

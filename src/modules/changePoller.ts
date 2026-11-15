@@ -4,7 +4,11 @@
  * 由用户决定是否批量拉取——不自动覆盖、不自动回流。
  */
 import { getPref, getCraftConfig } from "../utils/prefs";
-import { getAllMappings, removeMappedNote } from "./syncMapping";
+import {
+  getAllMappings,
+  getCraftBaseline,
+  removeMappedNote,
+} from "./syncMapping";
 import { beginOperation, endOperation, getClient } from "./syncEngine";
 import {
   getCraftClient,
@@ -111,7 +115,8 @@ export async function pollOnce(): Promise<string[]> {
       endOperation();
     }
     if (changed.length) {
-      for (const c of changed) markNotified(c.key, c.wpsTime);
+      // key 按端隔离：双目标条目同轮两端都变时，单槽会互相覆盖导致下轮重复提醒
+      for (const c of changed) markNotified(`${c.key}:${c.target}`, c.wpsTime);
       await showChangeDialog(changed);
     }
     return changed.map((c) => c.key);
@@ -168,7 +173,7 @@ async function detectChanges(
   const entries = Object.entries(mapping).filter(
     ([, entry]) =>
       entry.lastSuccess &&
-      entry.noteModified &&
+      (entry.noteModified || entry.craftNoteModified) &&
       (entry.noteId || entry.craftDocId),
   );
   if (!entries.length) return [];
@@ -183,7 +188,7 @@ async function detectChanges(
 
   const results = await runWithConcurrency<
     [string, (typeof entries)[number][1]],
-    ChangedEntry | null
+    ChangedEntry[] | null
   >(
     entries,
     async ([key, entry]) => {
@@ -204,92 +209,117 @@ async function detectChanges(
         ztoolkit.log("Poller: item lookup failed", key, e);
         return null;
       }
-      const base = String(entry.noteModified || "");
-      // 基准格式分流：ISO 时间来自 Craft 同步，纯数字来自 WPS 同步
-      if (/\d{4}-\d{2}-\d{2}T/.test(base)) {
+
+      // 双目标 entry（noteId + craftDocId 并存）两个分支各检测各的基准
+      const out: ChangedEntry[] = [];
+
+      // Craft 分支：craft 基准（ISO；兼容旧数据的 ISO noteModified）
+      const craftBase = getCraftBaseline(entry);
+      if (craftBase && entry.craftDocId && craftClient) {
         // 分区就绪：标记后的用户笔记区手改是预期行为（不属于"远端改动"，
         // 无需提醒回流）；标记前的 Zotero 区以 Zotero 为准，同样无需回流
-        if (entry.markerBlockId) return null;
-        if (!craftClient || !entry.craftDocId) return null;
-        const prev = Date.parse(base);
-        if (!Number.isFinite(prev)) return null;
-
-        // 批量索引命中：无需额外请求
-        const cached = craftTimes?.get(entry.craftDocId);
-        if (cached !== undefined) {
-          const curr = Date.parse(cached);
-          if (
-            Number.isFinite(curr) &&
-            curr > prev &&
-            notified.get(key) !== cached
-          ) {
-            return { key, wpsTime: cached, target: "craft" as const };
+        if (!entry.markerBlockId) {
+          const prev = Date.parse(craftBase);
+          if (Number.isFinite(prev)) {
+            // 批量索引命中：无需额外请求
+            const cached = craftTimes?.get(entry.craftDocId);
+            if (cached !== undefined) {
+              const curr = Date.parse(cached);
+              if (
+                Number.isFinite(curr) &&
+                curr > prev &&
+                notified.get(`${key}:craft`) !== cached
+              ) {
+                out.push({ key, wpsTime: cached, target: "craft" as const });
+              }
+            } else {
+              // 索引未命中（文档不在列表中/拉取失败）→ 逐条校验
+              try {
+                const root = await craftClient.fetchBlocks(entry.craftDocId, {
+                  maxDepth: 0,
+                  fetchMetadata: true,
+                });
+                const remote = String(extractLastModified(root) || "");
+                const curr = Date.parse(remote);
+                if (
+                  remote &&
+                  Number.isFinite(curr) &&
+                  curr > prev &&
+                  notified.get(`${key}:craft`) !== remote
+                ) {
+                  out.push({ key, wpsTime: remote, target: "craft" as const });
+                }
+              } catch (e) {
+                if (
+                  e instanceof CraftError &&
+                  (e.status === 404 || e.status === 400)
+                ) {
+                  // 文档已删（回收站）：清映射与 extra 冗余，下次同步走新建。
+                  // 增量跳过先行后，同步路径不再做存在性校验，轮询成为唯一的悬空映射发现点
+                  removeMappedNote(key);
+                  if (item) await clearCraftDocIdFromExtra(item);
+                  ztoolkit.log(
+                    "Poller: craft doc missing, mapping cleared",
+                    key,
+                  );
+                } else {
+                  ztoolkit.log("fetchBlocks failed during poll", key, e);
+                }
+              }
+            }
           }
-          return null;
         }
+      }
 
-        // 索引未命中（文档不在列表中/拉取失败）→ 逐条校验
-        try {
-          const root = await craftClient.fetchBlocks(entry.craftDocId, {
-            maxDepth: 0,
-            fetchMetadata: true,
-          });
-          const remote = String(extractLastModified(root) || "");
-          const curr = Date.parse(remote);
-          if (
-            remote &&
-            Number.isFinite(curr) &&
-            curr > prev &&
-            notified.get(key) !== remote
-          ) {
-            return { key, wpsTime: remote, target: "craft" as const };
-          }
-          return null;
-        } catch (e) {
-          if (
-            e instanceof CraftError &&
-            (e.status === 404 || e.status === 400)
-          ) {
-            // 文档已删（回收站）：清映射与 extra 冗余，下次同步走新建。
-            // 增量跳过先行后，同步路径不再做存在性校验，轮询成为唯一的悬空映射发现点
-            removeMappedNote(key);
-            if (item) await clearCraftDocIdFromExtra(item);
-            ztoolkit.log("Poller: craft doc missing, mapping cleared", key);
+      // WPS 分支：noteModified 数字时间戳基准（ISO 说明是旧 Craft 数据，不属 WPS）。
+      // 分区就绪（wpsMarkerBlockId 存在）时跳过：marker 后用户区手改是预期行为、
+      // marker 前 Zotero 区以 Zotero 为准——与 Craft 分区就绪跳过检测对等。
+      const wpsBase = String(entry.noteModified || "");
+      if (
+        wpsBase &&
+        !/^\d{4}-\d{2}-\d{2}T/.test(wpsBase) &&
+        entry.noteId &&
+        wpsClient &&
+        !entry.wpsMarkerBlockId
+      ) {
+        const baseNum = Number(wpsBase);
+        if (Number.isFinite(baseNum)) {
+          const cachedWps = wpsTimes?.get(entry.noteId);
+          if (cachedWps !== undefined) {
+            if (
+              cachedWps > baseNum &&
+              notified.get(`${key}:wps`) !== String(cachedWps)
+            ) {
+              out.push({
+                key,
+                wpsTime: String(cachedWps),
+                target: "wps" as const,
+              });
+            }
           } else {
-            ztoolkit.log("fetchBlocks failed during poll", key, e);
+            try {
+              const info = await wpsClient.getNoteInfo(entry.noteId);
+              const wps = String(info.updateTime || "");
+              if (wps && Number.isFinite(Number(wps))) {
+                if (
+                  Number(wps) > baseNum &&
+                  notified.get(`${key}:wps`) !== wps
+                ) {
+                  out.push({ key, wpsTime: wps, target: "wps" as const });
+                }
+              }
+            } catch (e) {
+              ztoolkit.log("getNoteInfo failed during poll", key, e); // 单条失败跳过
+            }
           }
-          return null;
         }
-      }
-      if (!wpsClient || !entry.noteId) return null;
-      const baseNum = Number(base);
-      if (!Number.isFinite(baseNum)) return null;
-
-      const cachedWps = wpsTimes?.get(entry.noteId);
-      if (cachedWps !== undefined) {
-        return cachedWps > baseNum && notified.get(key) !== String(cachedWps)
-          ? { key, wpsTime: String(cachedWps), target: "wps" as const }
-          : null;
       }
 
-      try {
-        const info = await wpsClient.getNoteInfo(entry.noteId);
-        const wps = String(info.updateTime || "");
-        if (!wps || !Number.isFinite(Number(wps))) {
-          return null;
-        }
-        if (Number(wps) > baseNum && notified.get(key) !== wps) {
-          return { key, wpsTime: wps, target: "wps" as const };
-        }
-        return null;
-      } catch (e) {
-        ztoolkit.log("getNoteInfo failed during poll", key, e); // 单条失败跳过
-        return null;
-      }
+      return out.length ? out : null;
     },
     { concurrency: 3 },
   );
-  return results.filter((r): r is ChangedEntry => r !== null);
+  return results.flatMap((r) => r ?? []);
 }
 
 async function showChangeDialog(changed: ChangedEntry[]): Promise<void> {

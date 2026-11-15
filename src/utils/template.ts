@@ -500,15 +500,15 @@ export function renderItemTemplate(
 const DEFAULT_TITLE_TEMPLATE = "[Zotero] {{title}}";
 
 // —— 阅读预设共享片段（EN）——
-const META_HEAD_EN = `<h1>{{title}}</h1>
-<blockquote>{{#if authors}}<strong>Authors</strong> {{authors}}
-{{/if}}{{#if publicationTitle}}<strong>Journal</strong> {{publicationTitle}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}
-{{/if}}{{#if yearOrDate}}{{#unless publicationTitle}}<strong>Date</strong> {{yearOrDate}}
-{{/unless}}{{/if}}📝 {{annotationCount}} annotations · 📄 {{noteCount}} notes</blockquote>
+const META_HEAD_EN = `<h1><span fontColor="#1E3A5F">{{title}}</span></h1>
+<blockquote>{{#if authors}}<span fontColor="#2563EB"><strong>Authors</strong></span> {{authors}}
+{{/if}}{{#if publicationTitle}}<span fontColor="#2563EB"><strong>Journal</strong></span> {{publicationTitle}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}
+{{/if}}{{#if yearOrDate}}{{#unless publicationTitle}}<span fontColor="#2563EB"><strong>Date</strong></span> {{yearOrDate}}
+{{/unless}}{{/if}}<span fontColor="#64748B">📝 {{annotationCount}} annotations · 📄 {{noteCount}} notes</span></blockquote>
 {{#if hasTags}}<p>{{{tagsXmlDoc}}}</p>{{/if}}`;
 
 const NOTES_EN = `{{#if hasNotes}}
-<h2>✏️ My Notes</h2>
+<h2><span fontHighlightColor="#FEF3C7">✏️ My Notes</span></h2>
 {{#each notes}}
 {{#if title}}<h3>{{title}}</h3>{{/if}}
 {{{contentParagraph}}}
@@ -517,21 +517,18 @@ const NOTES_EN = `{{#if hasNotes}}
 {{/if}}`;
 
 const ANNOTATIONS_EN = `{{#if hasAnnotations}}
-<h2>💡 Annotations · {{annotationCount}}</h2>
+<h2><span fontHighlightColor="#EDE9FE">💡 Annotations · {{annotationCount}}</span></h2>
 {{#each annotationGroupsByColor}}
 {{#if colorName}}<h3><span fontHighlightColor="{{color}}">{{colorName}} · {{count}}</span></h3>{{/if}}
 {{#each items}}
 <highlightBlock emoji="{{#if comment}}💡{{else}}📝{{/if}}" highlightBlockBackgroundColor="{{color}}{{bgAlpha}}" highlightBlockBorderColor="{{color}}">
-{{#if comment}}{{{commentBeforeTableXml}}}{{/if}}
-{{#if tags}}<p>{{{tagsXml}}}</p>{{/if}}
-{{#if comment}}
-<p><span fontHighlightColor="#F0F0F0">📎 Source · {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
-{{#if hasText}}<p><em>{{textMd}}</em></p>{{/if}}
-{{{commentAfterTableXml}}}
+{{#if comment}}{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}
+<p><span fontHighlightColor="#F0F0F0">📎 Source · {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span>{{#if hasText}} <em>{{textMd}}</em>{{/if}}</p>
 {{else}}
 {{#if hasText}}{{{textParagraph}}}{{/if}}
 <p><span fontHighlightColor="{{altColor}}">📎 {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
 {{/if}}
+{{#if tags}}<p>{{{tagsXml}}}</p>{{/if}}
 </highlightBlock>
 {{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
 {{/each}}
@@ -539,25 +536,25 @@ const ANNOTATIONS_EN = `{{#if hasAnnotations}}
 {{/if}}`;
 
 const ABSTRACT_EN = `{{#if hasAbstract}}
-<h2>📋 Abstract</h2>
-<highlightBlock emoji="📋" highlightBlockBackgroundColor="#EEF3F8" highlightBlockBorderColor="#8A8F98">
+<h2><span fontHighlightColor="#D6F5F0">📋 Abstract</span></h2>
+<highlightBlock emoji="📋" highlightBlockBackgroundColor="#EAF7F5" highlightBlockBorderColor="#5EC5C5">
 {{{abstractParagraph}}}
 </highlightBlock>
 {{/if}}`;
 
 const ATTACHMENTS_EN = `{{#if hasAttachments}}
-<h2>📎 Attachments</h2>
+<h2><span fontHighlightColor="#DBEAFE">📎 Attachments</span></h2>
 <ul>
 {{#each attachments}}<li>📄 {{title}}{{#if isPDF}} · {{{zoteroOpenLink}}}{{/if}}</li>{{/each}}
 </ul>
 {{/if}}`;
 
-const BIB_EN = `<h2>📚 Bibliographic Details</h2>
-<blockquote>{{#if itemType}}<strong>Type</strong> {{itemType}}
-{{/if}}{{#if hasDOI}}<strong>DOI</strong> {{{doiLink}}}
-{{/if}}{{#if hasURL}}<strong>URL</strong> {{{urlLink}}}
-{{/if}}{{#if citeKey}}<strong>BibTeX</strong> {{citeKey}}
-{{/if}}<strong>Zotero</strong> {{itemKey}}</blockquote>`;
+const BIB_EN = `<h2><span fontHighlightColor="#E2E8F0">📚 Bibliographic Details</span></h2>
+<blockquote>{{#if itemType}}<span fontColor="#2563EB"><strong>Type</strong></span> {{itemType}}
+{{/if}}{{#if hasDOI}}<span fontColor="#2563EB"><strong>DOI</strong></span> {{{doiLink}}}
+{{/if}}{{#if hasURL}}<span fontColor="#2563EB"><strong>URL</strong></span> {{{urlLink}}}
+{{/if}}{{#if citeKey}}<span fontColor="#2563EB"><strong>BibTeX</strong></span> {{citeKey}}
+{{/if}}<span fontColor="#2563EB"><strong>Zotero</strong></span> {{itemKey}}</blockquote>`;
 
 const DEFAULT_BODY_TEMPLATE_EN = `${META_HEAD_EN}
 ${ABSTRACT_EN}
@@ -580,15 +577,15 @@ ${ATTACHMENTS_EN}
 ${BIB_EN}`;
 
 // —— 阅读预设共享片段（ZH）——
-const META_HEAD_ZH = `<h1>{{title}}</h1>
-<blockquote>{{#if authors}}<strong>作者</strong> {{authors}}
-{{/if}}{{#if publicationTitle}}<strong>期刊</strong> {{publicationTitle}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}
-{{/if}}{{#if yearOrDate}}{{#unless publicationTitle}}<strong>发表时间</strong> {{yearOrDate}}
-{{/unless}}{{/if}}📝 {{annotationCount}} 条标注 · 📄 {{noteCount}} 篇笔记</blockquote>
+const META_HEAD_ZH = `<h1><span fontColor="#1E3A5F">{{title}}</span></h1>
+<blockquote>{{#if authors}}<span fontColor="#2563EB"><strong>作者</strong></span> {{authors}}
+{{/if}}{{#if publicationTitle}}<span fontColor="#2563EB"><strong>期刊</strong></span> {{publicationTitle}}{{#if yearOrDate}} · {{yearOrDate}}{{/if}}
+{{/if}}{{#if yearOrDate}}{{#unless publicationTitle}}<span fontColor="#2563EB"><strong>发表时间</strong></span> {{yearOrDate}}
+{{/unless}}{{/if}}<span fontColor="#64748B">📝 {{annotationCount}} 条标注 · 📄 {{noteCount}} 篇笔记</span></blockquote>
 {{#if hasTags}}<p>{{{tagsXmlDoc}}}</p>{{/if}}`;
 
 const NOTES_ZH = `{{#if hasNotes}}
-<h2>✏️ 我的笔记</h2>
+<h2><span fontHighlightColor="#FEF3C7">✏️ 我的笔记</span></h2>
 {{#each notes}}
 {{#if title}}<h3>{{title}}</h3>{{/if}}
 {{{contentParagraph}}}
@@ -597,21 +594,18 @@ const NOTES_ZH = `{{#if hasNotes}}
 {{/if}}`;
 
 const ANNOTATIONS_ZH = `{{#if hasAnnotations}}
-<h2>💡 文献批注 · {{annotationCount}} 条</h2>
+<h2><span fontHighlightColor="#EDE9FE">💡 文献批注 · {{annotationCount}} 条</span></h2>
 {{#each annotationGroupsByColor}}
 {{#if colorName}}<h3><span fontHighlightColor="{{color}}">{{colorName}} · {{count}} 条</span></h3>{{/if}}
 {{#each items}}
 <highlightBlock emoji="{{#if comment}}💡{{else}}📝{{/if}}" highlightBlockBackgroundColor="{{color}}{{bgAlpha}}" highlightBlockBorderColor="{{color}}">
-{{#if comment}}{{{commentBeforeTableXml}}}{{/if}}
-{{#if tags}}<p>{{{tagsXml}}}</p>{{/if}}
-{{#if comment}}
-<p><span fontHighlightColor="#F0F0F0">📎 原文 · {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
-{{#if hasText}}<p><em>{{textMd}}</em></p>{{/if}}
-{{{commentAfterTableXml}}}
+{{#if comment}}{{{commentBeforeTableXml}}}{{{commentAfterTableXml}}}
+<p><span fontHighlightColor="#F0F0F0">📎 原文 · {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span>{{#if hasText}} <em>{{textMd}}</em>{{/if}}</p>
 {{else}}
 {{#if hasText}}{{{textParagraph}}}{{/if}}
 <p><span fontHighlightColor="{{altColor}}">📎 {{typeLabel}}{{#if pageIndex}} · P.{{pageIndex}}{{/if}}</span></p>
 {{/if}}
+{{#if tags}}<p>{{{tagsXml}}}</p>{{/if}}
 </highlightBlock>
 {{#if commentHasTable}}{{{commentTableXml}}}{{/if}}
 {{/each}}
@@ -619,25 +613,25 @@ const ANNOTATIONS_ZH = `{{#if hasAnnotations}}
 {{/if}}`;
 
 const ABSTRACT_ZH = `{{#if hasAbstract}}
-<h2>📋 摘要</h2>
-<highlightBlock emoji="📋" highlightBlockBackgroundColor="#EEF3F8" highlightBlockBorderColor="#8A8F98">
+<h2><span fontHighlightColor="#D6F5F0">📋 摘要</span></h2>
+<highlightBlock emoji="📋" highlightBlockBackgroundColor="#EAF7F5" highlightBlockBorderColor="#5EC5C5">
 {{{abstractParagraph}}}
 </highlightBlock>
 {{/if}}`;
 
 const ATTACHMENTS_ZH = `{{#if hasAttachments}}
-<h2>📎 附件</h2>
+<h2><span fontHighlightColor="#DBEAFE">📎 附件</span></h2>
 <ul>
 {{#each attachments}}<li>📄 {{title}}{{#if isPDF}} · {{{zoteroOpenLink}}}{{/if}}</li>{{/each}}
 </ul>
 {{/if}}`;
 
-const BIB_ZH = `<h2>📚 文献详情</h2>
-<blockquote>{{#if itemType}}<strong>类型</strong> {{itemType}}
-{{/if}}{{#if hasDOI}}<strong>DOI</strong> {{{doiLink}}}
-{{/if}}{{#if hasURL}}<strong>链接</strong> {{{urlLink}}}
-{{/if}}{{#if citeKey}}<strong>BibTeX</strong> {{citeKey}}
-{{/if}}<strong>Zotero</strong> {{itemKey}}</blockquote>`;
+const BIB_ZH = `<h2><span fontHighlightColor="#E2E8F0">📚 文献详情</span></h2>
+<blockquote>{{#if itemType}}<span fontColor="#2563EB"><strong>类型</strong></span> {{itemType}}
+{{/if}}{{#if hasDOI}}<span fontColor="#2563EB"><strong>DOI</strong></span> {{{doiLink}}}
+{{/if}}{{#if hasURL}}<span fontColor="#2563EB"><strong>链接</strong></span> {{{urlLink}}}
+{{/if}}{{#if citeKey}}<span fontColor="#2563EB"><strong>BibTeX</strong></span> {{citeKey}}
+{{/if}}<span fontColor="#2563EB"><strong>Zotero</strong></span> {{itemKey}}</blockquote>`;
 
 const DEFAULT_BODY_TEMPLATE_ZH = `${META_HEAD_ZH}
 ${ABSTRACT_ZH}
@@ -782,5 +776,47 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
 <h2>标签</h2>
 <p>{{tagsJoined}}</p>
 {{/if}}`,
+  },
+  {
+    // PaperNote 风格（参考 jackhanyuan/zotero-better-plugin 的 PaperNote 模板）：
+    // 元数据表格交替行底色 + 期刊红字 + 三分区阅读骨架。
+    // 说明：卷(期)页码字段引擎未提取、Note Date 动态时间会破坏增量跳过，故不复刻。
+    id: "papernote",
+    name: "PaperNote 风格",
+    titleTemplate: "[PaperNote] {{title}}",
+    bodyTemplate: `<h1><span fontColor="#193C47" fontHighlightColor="#EEF9FD">{{#if yearOrDate}}({{yearOrDate}}) {{/if}}{{title}}</span></h1>
+<table>
+<tr><td><p><span fontHighlightColor="#DBEEDD"><span fontColor="#193C47"><strong>Author:</strong></span> {{authors}}</span></p></td></tr>
+<tr><td><p><span fontHighlightColor="#F3FAF4"><span fontColor="#193C47"><strong>Journal:</strong></span>{{#if publicationTitle}} <span fontColor="#FF0000">{{publicationTitle}}</span>{{#if yearOrDate}}, {{yearOrDate}}{{/if}}{{else}}{{#if yearOrDate}} {{yearOrDate}}{{/if}}{{/if}}</span></p></td></tr>
+{{#if zoteroLink}}
+<tr><td><p><span fontHighlightColor="#DBEEDD"><span fontColor="#193C47"><strong>Local Link:</strong></span> <a href="{{{zoteroLink}}}">Open in Zotero</a></span></p></td></tr>
+{{/if}}
+{{#if hasDOI}}
+<tr><td><p><span fontHighlightColor="#F3FAF4"><span fontColor="#193C47"><strong>DOI:</strong></span> {{{doiLink}}}</span></p></td></tr>
+{{else}}{{#if hasURL}}
+<tr><td><p><span fontHighlightColor="#F3FAF4"><span fontColor="#193C47"><strong>URL:</strong></span> {{{urlLink}}}</span></p></td></tr>
+{{/if}}{{/if}}
+{{#if hasAbstract}}
+<tr><td><p><span fontColor="#193C47"><strong>Abstract:</strong></span></p>{{{abstractParagraph}}}</td></tr>
+{{/if}}
+{{#if hasTags}}
+<tr><td><p><span fontHighlightColor="#DBEEDD"><span fontColor="#193C47"><strong>Tags:</strong></span> {{{tagsXmlDoc}}}</span></p></td></tr>
+{{/if}}
+</table>
+<h2><span fontColor="#E0FFFF" fontHighlightColor="#66CDAA">📜 Research Core</span></h2>
+<blockquote>Tips: What was done, what problem was solved, innovations and shortcomings?</blockquote>
+<h3>⚙️ Content</h3>
+<h3>💡 Innovations</h3>
+<h3>🧩 Shortcomings</h3>
+<h2><span fontColor="#20B2AA" fontHighlightColor="#AFEEEE">🔁 Research Content</span></h2>
+<h3>💧 Data</h3>
+<h3>👩‍💻 Method</h3>
+<h3>🔬 Experiment</h3>
+<h3>📜 Conclusion</h3>
+<h2><span fontColor="#004D99" fontHighlightColor="#87CEFA">🤔 Personal Summary</span></h2>
+<blockquote>Tips: What aspects did you question, how do you think it can be improved?</blockquote>
+<h3>🙋 Key Records</h3>
+<h3>📌 To be resolved</h3>
+<h3>💭 Thought Inspiration</h3>`,
   },
 ];

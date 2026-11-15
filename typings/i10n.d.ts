@@ -7,9 +7,10 @@ export type FluentMessageId =
   | 'menu-force-sync-to-wpsnote'
   | 'menu-pull-from-craft'
   | 'menu-pull-from-wpsnote'
+  | 'menu-submenu-title'
   | 'menu-sync-collection-to-wpsnote'
   | 'menu-sync-history'
-  | 'menu-sync-to-wpsnote'
+  | 'menu-sync-to'
   | 'pref-autoSyncEnabled'
   | 'pref-autoSyncLibraries'
   | 'pref-autoSyncLibraries-help'
@@ -75,4 +76,7 @@ export type FluentMessageId =
   | 'prefs-source'
   | 'prefs-title'
   | 'sync-begin'
-  | 'sync-history-title';
+  | 'sync-history-title'
+  | 'target-both'
+  | 'target-craft'
+  | 'target-wps';

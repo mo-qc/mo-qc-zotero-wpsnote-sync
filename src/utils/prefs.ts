@@ -1,5 +1,6 @@
 import { config } from "../../package.json";
 import { decryptString, encryptString } from "./secret";
+import { getString } from "./locale";
 
 type PluginPrefsMap = _ZoteroTypes.Prefs["PluginPrefsMap"];
 
@@ -107,14 +108,53 @@ export function isAutoSyncLibrary(libraryID: number): boolean {
   }
 }
 
-/** 同步目标：wps（默认）或 craft */
-export function getSyncTarget(): "wps" | "craft" {
-  const v = String(getPref("syncTarget") || "wps");
+/** 旧单选同步目标（仅用于新多选 pref 的一次性迁移）：wps（默认）或 craft */
+function getLegacySyncTarget(): "wps" | "craft" {
+  // 旧 key 已从 prefs.js 移除（PluginPrefsMap 不再包含），直接读原始 pref 完成迁移
+  const v = String(
+    Zotero.Prefs.get(`${PREFS_PREFIX}.syncTarget`, true) ?? "wps",
+  );
   return v === "craft" ? "craft" : "wps";
 }
 
-export function setSyncTarget(target: "wps" | "craft"): void {
-  setPref("syncTarget", target);
+export type SyncTarget = "wps" | "craft";
+
+/**
+ * 同步目标多选：两个独立 bool pref（syncTargetWps / syncTargetCraft），
+ * 可同时勾选 = 同一次同步推送到两个目标。
+ * - 两个新 pref 均未初始化时按旧单选 syncTarget 迁移一次；
+ * - 全部未勾选时保底返回 ["wps"]（不允许零目标）。
+ */
+export function getSyncTargets(): SyncTarget[] {
+  const wpsRaw = getPref("syncTargetWps");
+  const craftRaw = getPref("syncTargetCraft");
+  if (
+    wpsRaw === undefined ||
+    wpsRaw === null ||
+    craftRaw === undefined ||
+    craftRaw === null
+  ) {
+    // 一次性迁移：按旧单选值初始化新 pref
+    const legacy = getLegacySyncTarget();
+    const wps = legacy === "wps";
+    const craft = legacy === "craft";
+    setPref("syncTargetWps", wps);
+    setPref("syncTargetCraft", craft);
+    return craft && !wps ? ["craft"] : ["wps"];
+  }
+  const targets: SyncTarget[] = [];
+  if (wpsRaw) targets.push("wps");
+  if (craftRaw) targets.push("craft");
+  return targets.length ? targets : ["wps"];
+}
+
+/** 同步目标的人类可读标签（菜单/进度窗文案用；双语文案由 ftl 提供） */
+export function getSyncTargetsLabel(): string {
+  const targets = getSyncTargets();
+  if (targets.length === 2) return getString("target-both");
+  return targets[0] === "craft"
+    ? getString("target-craft")
+    : getString("target-wps");
 }
 
 /** Craft API Bearer token（混淆存储，兼容明文旧值） */

@@ -635,6 +635,141 @@ export class WpsMcpClient {
     return this.batchEdit(noteId, operations);
   }
 
+  /** 分页读全整篇笔记 XML（长笔记跨多页；偏移以服务端 next_offset 为准，避免重复拼接） */
+  async readNoteFull(noteId: string): Promise<string> {
+    let xml = "";
+    let offset = 0;
+    for (let page = 0; page < 500; page++) {
+      const r = await this.readNote(noteId, offset, 100);
+      xml += r.content;
+      if (!r.hasMore || r.nextOffset <= offset) break;
+      offset = r.nextOffset;
+    }
+    return xml;
+  }
+
+  /**
+   * 分区替换：只重写 marker 之前的 Zotero 区，marker 及其后的用户笔记区零触碰。
+   * - readNote 拿带块 id 的整篇 XML → 定位 marker 顶层块
+   * - 块级操作：delete marker 前所有顶层块 → insert(anchor=marker, before, 新内容)
+   * - marker 不存在（旧映射从未分区/用户删了 marker）→ 回退全量替换并重建分区，
+   *   与 Craft no-marker 行为对等；回退会覆盖远端手写，仅发生在未分区的旧笔记上
+   * 返回 marker 块 id 与图片同步锚点（图片属 Zotero 区，锚在 marker 前）。
+   */
+  async replaceZoteroRegion(
+    noteId: string,
+    newContentXml: string,
+    markerPhrase: string,
+    markerXml: string,
+    outline?: NoteOutline,
+  ): Promise<{
+    markerBlockId: string;
+    imageAnchorId: string;
+    imageAnchorPosition: "before" | "after";
+  }> {
+    const resolvedOutline = outline || (await this.getNoteOutline(noteId));
+    const blocks = Array.isArray(resolvedOutline?.blocks)
+      ? resolvedOutline.blocks
+      : [];
+    if (!blocks.length) {
+      throw new Error("无法获取笔记 block 列表");
+    }
+
+    const xml = await this.readNoteFull(noteId);
+    const markerId = findMarkerBlockId(
+      xml,
+      markerPhrase,
+      new Set(blocks.map((b) => b.id)),
+    );
+
+    if (markerId) {
+      const idx = blocks.findIndex((b) => b.id === markerId);
+      // marker 之前的 Zotero 区整段删除（50/批攒进一次 batchEdit）；marker 及用户区不动
+      const toDelete = blocks
+        .slice(0, idx)
+        .map((b) => b.id)
+        .filter(Boolean);
+      if (toDelete.length) {
+        const operations: any[] = [];
+        const DELETE_BATCH_SIZE = 50;
+        for (let i = 0; i < toDelete.length; i += DELETE_BATCH_SIZE) {
+          operations.push({
+            op: "delete",
+            block_ids: toDelete.slice(i, i + DELETE_BATCH_SIZE),
+          });
+        }
+        await this.batchEdit(noteId, operations);
+      }
+      if (newContentXml.trim()) {
+        await this.editBlock(noteId, "insert", {
+          anchor_id: markerId,
+          position: "before",
+          content: newContentXml,
+        });
+      }
+      return {
+        markerBlockId: markerId,
+        imageAnchorId: markerId,
+        imageAnchorPosition: "before",
+      };
+    }
+
+    // 回退：无 marker → 全量替换后独立 insert marker。
+    // 尾部拼接（content 追加）的 marker 会被 WPS 解析丢弃（真机复现：
+    // 写入时回读可见、随后消失），必须走 edit_block insert 独立块。
+    await this.replaceNoteContent(noteId, newContentXml, resolvedOutline);
+    const markerId2 = await this.appendMarkerBlock(
+      noteId,
+      markerXml,
+      markerPhrase,
+    );
+    if (!markerId2) {
+      throw new Error("分区重建后无法写入 marker 块");
+    }
+    return {
+      markerBlockId: markerId2,
+      imageAnchorId: markerId2,
+      imageAnchorPosition: "before",
+    };
+  }
+
+  /**
+   * 末尾独立 insert marker 块并提取其顶层块 id。
+   * insert 返回值不含新块 id，用 readNote+outline 定位；失败返回 undefined。
+   */
+  async appendMarkerBlock(
+    noteId: string,
+    markerXml: string,
+    markerPhrase: string,
+  ): Promise<string | undefined> {
+    const outline = await this.getNoteOutline(noteId);
+    const blocks = Array.isArray(outline?.blocks) ? outline.blocks : [];
+    const lastId = blocks.length ? blocks[blocks.length - 1].id : undefined;
+    if (!lastId) return undefined;
+    await this.editBlock(noteId, "insert", {
+      anchor_id: lastId,
+      position: "after",
+      content: markerXml,
+    });
+    return await this.extractMarkerBlockId(noteId, markerPhrase);
+  }
+
+  /**
+   * 创建/重建后提取 marker 顶层块 id（readNote 全文 + outline 顶层集合验证）。
+   * 提取失败返回 undefined——调用方降级为不记录，下次同步走回退重建。
+   */
+  async extractMarkerBlockId(
+    noteId: string,
+    markerPhrase: string,
+  ): Promise<string | undefined> {
+    const [xml, outline] = await Promise.all([
+      this.readNoteFull(noteId),
+      this.getNoteOutline(noteId),
+    ]);
+    const ids = new Set((outline.blocks || []).map((b) => b.id));
+    return findMarkerBlockId(xml, markerPhrase, ids);
+  }
+
   async addNoteTags(
     noteId: string,
     tagNames: string[],
@@ -894,4 +1029,28 @@ export class WpsMcpClient {
       height: dims.height,
     };
   }
+}
+
+/**
+ * 从 readNote 返回的带 id XML 中定位 marker 所在的顶层块 id。
+ * 短语往前收集所有开标签 id，倒序取第一个出现在顶层块集合中的
+ * （短语若被内联标签包裹，内联 id 不在顶层集合会被跳过）。
+ * 找不到返回 undefined。
+ */
+export function findMarkerBlockId(
+  xml: string,
+  phrase: string,
+  topLevelIds: Set<string>,
+): string | undefined {
+  const idx = xml.indexOf(phrase);
+  if (idx < 0) return undefined;
+  const before = xml.slice(0, idx);
+  const ids = Array.from(
+    before.matchAll(/<([a-zA-Z][\w]*)\b[^>]*\bid="([^"]+)"/g),
+    (m) => m[2],
+  );
+  for (let i = ids.length - 1; i >= 0; i--) {
+    if (topLevelIds.has(ids[i])) return ids[i];
+  }
+  return undefined;
 }

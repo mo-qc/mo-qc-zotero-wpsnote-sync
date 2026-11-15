@@ -199,6 +199,22 @@ function bindPrefEvents() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
 
+  // 横版 tab 切换：按 data-tab / data-panel 显隐面板
+  doc.querySelector(".zws-tab-bar")?.addEventListener("click", (ev: Event) => {
+    const btn = (ev.target as Element).closest?.(
+      ".zws-tab",
+    ) as HTMLElement | null;
+    if (!btn?.dataset.tab) return;
+    const tab = btn.dataset.tab;
+    doc
+      .querySelectorAll(".zws-tab")
+      .forEach((t: Element) => t.classList.toggle("active", t === btn));
+    doc.querySelectorAll(".zws-tab-panel").forEach((p: Element) => {
+      const panel = p as HTMLElement;
+      panel.classList.toggle("active", panel.dataset.panel === tab);
+    });
+  });
+
   buildLibraryList(doc);
 
   const titleInput = doc.getElementById(

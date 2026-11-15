@@ -130,6 +130,30 @@ describe("markdown", function () {
       const result = markdownToWpsXml("1 < 2 & 2 > 0");
       expect(result).to.equal("<p>1 &lt; 2 &amp; 2 &gt; 0</p>");
     });
+
+    it("keeps snake_case identifiers as plain text (no italic)", function () {
+      const result = markdownToWpsXml("use some_var_name here");
+      expect(result).to.equal("<p>use some_var_name here</p>");
+    });
+
+    it("still converts word-bounded _italic_", function () {
+      const result = markdownToWpsXml("a _real_ b");
+      expect(result).to.equal("<p>a <em>real</em> b</p>");
+    });
+
+    it("keeps last column when trailing pipe is omitted", function () {
+      const result = markdownToWpsXml("| a | b\n|---|---\n| 1 | 2");
+      expect(result).to.equal(
+        "<table><tr><td><p>a</p></td><td><p>b</p></td></tr><tr><td><p>1</p></td><td><p>2</p></td></tr></table>",
+      );
+    });
+
+    it("treats escaped pipe as literal text, not a separator", function () {
+      const result = markdownToWpsXml("| a \\| b | c |");
+      expect(result).to.equal(
+        "<table><tr><td><p>a | b</p></td><td><p>c</p></td></tr></table>",
+      );
+    });
   });
 
   describe("splitMarkdownByTable", function () {

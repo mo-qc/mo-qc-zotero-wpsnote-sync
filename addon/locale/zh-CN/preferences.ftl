@@ -27,7 +27,7 @@ pref-syncIncludeNotes = 文献笔记
 pref-autoSyncEnabled = 启用自动同步（按标签）
 pref-autoSyncOnModify = 修改时自动同步（元数据/批注变更后 2 秒自动同步）
 pref-autoSyncTag = 自动同步标签
-pref-autoSyncTag-help = 给条目添加此标签后自动同步到 WPS；开启“修改时自动同步”后，文献元数据或 PDF 批注变更也会触发同步
+pref-autoSyncTag-help = 给条目添加此标签后自动同步到所选目标；开启“修改时自动同步”后，文献元数据或 PDF 批注变更也会触发同步
 pref-autoSyncLibraries = 同步的文献库
 pref-autoSyncLibraries-help = 只有勾选的文献库会参与自动同步；订阅默认不同步，勾选后才会同步。取消勾选任意库即写入你的选择
 pref-titleTemplate = 笔记标题模板
@@ -35,9 +35,9 @@ pref-titlePreview = 标题预览
 pref-bodyTemplate = 笔记正文模板（留空使用默认）
 pref-bodyPreview = 正文预览（实时）
 pref-bodyTemplate-help = 语法：双大括号变量会转义输出，三重大括号原样输出 XML；可用 if/else、each 控制结构。常用变量：title、authors、yearOrDate、publicationTitle、itemType、DOI、url、citeKey、itemKey、abstractParagraph、doiLink、urlLink、hasAnnotations、annotationGroupsByColor、hasNotes、contentParagraph、hasTags。
-pref-changePollEnabled = 启用 WPS 改动轮询提醒
+pref-changePollEnabled = 启用远端改动轮询提醒
 pref-changePollInterval = 轮询间隔（分钟）
-pref-changePoll-help = 定期检查已同步笔记在 WPS 端是否被修改，发现改动时弹窗提醒，由你决定是否拉取回 Zotero；不会自动覆盖任何一边
+pref-changePoll-help = 定期检查已同步笔记在 WPS/Craft 端是否被修改，发现改动时弹窗提醒，由你决定是否拉取回 Zotero；不会自动覆盖任何一边
 pref-help = { $name } Build { $version } { $time }
 
 # MCP Server（对外接口）
@@ -47,11 +47,9 @@ pref-mcpServer-help = 插件在本机 127.0.0.1:23119 提供 MCP 端点 /wpsnote
 
 # 同步目标与 Craft 连接
 pref-syncTarget = 同步目标
-pref-syncTarget-wps =
-    .label = WPS 笔记
-pref-syncTarget-craft =
-    .label = Craft 文档
-pref-syncTarget-help = 二选一：选中后所有同步（手动、标签、修改触发）都推送到该目标；两边的映射记录互相独立，切换回来后原映射仍然有效
+pref-syncTarget-wps = WPS 笔记
+pref-syncTarget-craft = Craft 文档
+pref-syncTarget-help = 可同时勾选：一次同步会依次推送到所有勾选的目标（WPS 与 Craft 的映射记录互相独立，各自维护增量基准）；全部取消勾选时保底同步到 WPS
 pref-craftApiLink = API Link
 pref-craftApiLink-help = Craft 桌面端「设置 → API links」生成的链接地址，形如 https://connect.craft.do/links/{linkId}/api/v1
 pref-craftApiToken = Bearer Token

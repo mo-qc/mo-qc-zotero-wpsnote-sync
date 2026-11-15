@@ -27,7 +27,7 @@ pref-syncIncludeNotes = Notes
 pref-autoSyncEnabled = Enable auto-sync by tag
 pref-autoSyncOnModify = Auto-sync on modify (metadata/annotation changes trigger sync after 2s)
 pref-autoSyncTag = Auto-sync tag
-pref-autoSyncTag-help = Sync item to WPS when this tag is added; when "Auto-sync on modify" is enabled, metadata or PDF annotation changes also trigger sync
+pref-autoSyncTag-help = Sync item to the selected targets when this tag is added; when "Auto-sync on modify" is enabled, metadata or PDF annotation changes also trigger sync
 pref-autoSyncLibraries = Libraries to sync
 pref-autoSyncLibraries-help = Only checked libraries participate in auto-sync; feeds (subscriptions) are excluded by default and sync only when checked
 pref-titleTemplate = Note Title Template
@@ -35,9 +35,9 @@ pref-titlePreview = Title Preview
 pref-bodyTemplate = Note Body Template (leave blank for default)
 pref-bodyPreview = Body Preview (live)
 pref-bodyTemplate-help = Syntax: double-braces variables are escaped, triple-braces output raw XML; supports if/else and each blocks. Common variables: title, authors, yearOrDate, publicationTitle, itemType, DOI, url, citeKey, itemKey, abstractParagraph, doiLink, urlLink, hasAnnotations, annotationGroupsByColor, hasNotes, contentParagraph, hasTags.
-pref-changePollEnabled = Enable WPS change polling reminders
+pref-changePollEnabled = Enable remote change polling reminders
 pref-changePollInterval = Polling interval (minutes)
-pref-changePoll-help = Periodically check whether synced notes were modified on the WPS side; when changes are found, a dialog asks whether to pull them back to Zotero. Nothing is overwritten automatically.
+pref-changePoll-help = Periodically check whether synced notes were modified on the WPS/Craft side; when changes are found, a dialog asks whether to pull them back to Zotero. Nothing is overwritten automatically.
 pref-help = { $name } Build { $version } { $time }
 
 # MCP Server (external endpoint)
@@ -47,11 +47,9 @@ pref-mcpServer-help = The plugin serves an MCP endpoint at 127.0.0.1:23119/wpsno
 
 # Sync target & Craft connection
 pref-syncTarget = Sync Target
-pref-syncTarget-wps =
-    .label = WPS Notes
-pref-syncTarget-craft =
-    .label = Craft Documents
-pref-syncTarget-help = Choose one: all sync paths (manual, tag, modify-triggered) push to the selected target; mappings for both sides are stored independently, so switching back keeps the original mappings valid
+pref-syncTarget-wps = WPS Notes
+pref-syncTarget-craft = Craft Documents
+pref-syncTarget-help = Check any combination: one sync pushes to every checked target in turn (WPS and Craft keep independent mappings and baselines); with nothing checked it falls back to WPS
 pref-craftApiLink = API Link
 pref-craftApiLink-help = Link generated under Craft desktop "Settings → API links", e.g. https://connect.craft.do/links/{linkId}/api/v1
 pref-craftApiToken = Bearer Token

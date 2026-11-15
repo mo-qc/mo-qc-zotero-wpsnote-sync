@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { WpsMcpClient } from "../src/modules/wpsMcpClient";
+import { WpsMcpClient, findMarkerBlockId } from "../src/modules/wpsMcpClient";
 
 type Call = { name: string; args: Record<string, any> };
 
@@ -151,6 +151,80 @@ describe("WpsMcpClient", function () {
       expect(times.get("a")).to.equal(111);
       expect(times.get("b")).to.equal(222);
       expect(times.size).to.equal(2);
+    });
+  });
+
+  describe("findMarkerBlockId", function () {
+    const phrase = "以下为我的笔记";
+
+    it("locates marker paragraph id", function () {
+      const xml = `<h1 id="h1">t</h1>\n\n<p id="m1">✍️ ${phrase}（Zotero 同步不会覆盖此区域）</p>`;
+      expect(findMarkerBlockId(xml, phrase, new Set(["h1", "m1"]))).to.equal(
+        "m1",
+      );
+    });
+
+    it("skips inline ids not in top-level set", function () {
+      const xml = `<p id="p1"><strong id="s1">✍️ ${phrase}</strong></p>`;
+      expect(findMarkerBlockId(xml, phrase, new Set(["p1", "h1"]))).to.equal(
+        "p1",
+      );
+    });
+
+    it("returns undefined when phrase absent", function () {
+      expect(findMarkerBlockId("<p id='p1'>hello</p>", phrase, new Set(["p1"])))
+        .to.be.undefined;
+    });
+
+    it("returns undefined when no id before phrase is top-level", function () {
+      const xml = `<strong id="s1">${phrase}</strong>`;
+      expect(findMarkerBlockId(xml, phrase, new Set(["p1"]))).to.be.undefined;
+    });
+  });
+
+  describe("appendMarkerBlock", function () {
+    const phrase = "以下为我的笔记";
+    const markerXml = `<p>✍️ ${phrase}（Zotero 同步不会覆盖此区域）</p>`;
+
+    it("inserts after last outline block and returns extracted id", async function () {
+      // 第一次 outline（appendMarkerBlock 定位末块）：a,b；
+      // insert 后第二次 outline（extractMarkerBlockId）：含新块 m1
+      let outlineCalls = 0;
+      const { client, calls } = makeClient((name) => {
+        if (name === "get_note_outline") {
+          outlineCalls++;
+          return outlineCalls === 1
+            ? { blocks: [{ id: "a" }, { id: "b" }] }
+            : { blocks: [{ id: "a" }, { id: "b" }, { id: "m1" }] };
+        }
+        if (name === "edit_block") return {};
+        if (name === "read_note")
+          return {
+            title: "t",
+            content: `<p id="b">x</p>\n\n${markerXml.replace("<p>", '<p id="m1">')}`,
+            pagination: { has_more: false },
+          };
+        return {};
+      });
+
+      const id = await client.appendMarkerBlock("n1", markerXml, phrase);
+
+      const insert = calls.find((c) => c.name === "edit_block");
+      expect(insert).to.exist;
+      expect(insert!.args.anchor_id).to.equal("b");
+      expect(insert!.args.position).to.equal("after");
+      expect(insert!.args.content).to.equal(markerXml);
+      expect(id).to.equal("m1");
+    });
+
+    it("returns undefined when outline is empty", async function () {
+      const { client, calls } = makeClient((name) => {
+        if (name === "get_note_outline") return { blocks: [] };
+        return {};
+      });
+      const id = await client.appendMarkerBlock("n1", markerXml, phrase);
+      expect(id).to.be.undefined;
+      expect(calls.filter((c) => c.name === "edit_block")).to.have.lengthOf(0);
     });
   });
 });
