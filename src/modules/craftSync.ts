@@ -17,6 +17,7 @@ import {
 } from "./zoteroItem";
 import { buildNoteTitle, buildNoteXml } from "../utils/xmlBuilder";
 import { wpsXmlToCraftMarkdown } from "../utils/craftMarkdown";
+import { splitTopLevelBlocks, buildDiffPlan } from "../utils/blockDiff";
 import { getCraftConfig, getPref } from "../utils/prefs";
 import {
   getCraftClient,
@@ -32,6 +33,27 @@ import {
 } from "./syncMapping";
 
 const EXTRA_CRAFT_ID_KEY = "ZWS-Craft-Id";
+
+/** 分区标记块内容：标记之前 = Zotero 区（同步器独占），之后 = 用户笔记区（永不覆盖） */
+const PARTITION_PHRASE = "以下为我的笔记";
+const PARTITION_MARKER_MARKDOWN = `---\n\n**✍️ ${PARTITION_PHRASE}**（Zotero 同步不会覆盖此区域）`;
+
+/**
+ * 内容指纹（FNV-1a 双 32 位 = 64 位 hex）：判断渲染结果是否与上次写入一致，
+ * 一致则零请求跳过。只对正文（不含同步脚注——脚注含当前时间，每次渲染必变）。
+ */
+export function computeContentHash(text: string): string {
+  const fnv = (seed: number): string => {
+    let h = seed >>> 0;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      // h *= 16777619（FNV 素数），拆乘防 32 位溢出精度丢失
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+  };
+  return fnv(0x811c9dc5) + fnv(0x1b873593);
+}
 
 function checkCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) {
@@ -194,19 +216,141 @@ function classifyCraftError(err: unknown): SyncResult["errorType"] {
  * 本轮判失败可保住增量基准（recordSyncResult 不写 lastSuccess），
  * 下次同步走完整流程真正自愈；若静默容忍，增量跳过会让重复内容
  * 一直滞留到条目下次被修改。
+ *
+ * 分区模式（markerBlockId 已知或远端存在标记块）：
+ * 标记块之前的块 = Zotero 区（同步器独占，可安全删除重写）；
+ * 标记块及其后的块 = 用户笔记区，本函数永不触碰。
+ * 无标记块（首次分区/老文档）：按全量替换处理，写入后在末尾建立标记。
  */
 export async function replaceDocumentContent(
   client: CraftClient,
   docId: string,
   markdown: string,
-): Promise<void> {
+  markerBlockId?: string,
+): Promise<{ markerBlockId?: string }> {
   const root = await client.fetchBlocks(docId, { maxDepth: 1 });
-  const oldIds = (root.content || [])
-    .map((b) => b.id)
-    .filter((id) => id && id !== docId);
-  if (markdown.trim()) {
-    await client.insertBlocks(docId, markdown);
+  const blocks = (root.content || []).filter((b) => b.id && b.id !== docId);
+
+  // 定位标记块：已知 id 优先（抗用户改文案），内容短语兜底（id 丢失/被移动）。
+  // id 命中须排除分隔线块：`---` 开头的 marker markdown 会被 Craft 拆成
+  // 「*** 分隔线 + 文本」两块，历史版本误把分隔线 id 记成了 marker
+  const isDivider = (md: string) => {
+    const t = md.trim();
+    return t === "***" || t === "---";
+  };
+  let markerIdx = markerBlockId
+    ? blocks.findIndex(
+        (b) => b.id === markerBlockId && !isDivider(String(b.markdown || "")),
+      )
+    : -1;
+  if (markerIdx < 0) {
+    markerIdx = blocks.findIndex((b) =>
+      String(b.markdown || "").includes(PARTITION_PHRASE),
+    );
   }
+  const marker = markerIdx >= 0 ? blocks[markerIdx] : undefined;
+
+  if (marker) {
+    // P1 块级增量：PUT 变更块（保留 id）、删多余、插缺失；匹配率不足回退全量
+    const remote = blocks
+      .slice(0, markerIdx)
+      .map((b) => ({ id: b.id as string, markdown: String(b.markdown || "") }));
+    const rendered = splitTopLevelBlocks(markdown);
+    const plan = buildDiffPlan(remote, rendered);
+
+    if (plan) {
+      try {
+        if (plan.puts.length) {
+          await client.updateBlocks(plan.puts);
+        }
+      } catch (e) {
+        // PUT 失败（如 MARKDOWN_PARSING_ERROR）→ 记录诊断并回退全量分区替换
+        ztoolkit.log(
+          "Craft block PUT failed, fallback to full partition replace",
+          e,
+          plan.puts
+            .slice(0, 3)
+            .map((p) => ({ id: p.id, md: p.markdown.slice(0, 120) })),
+        );
+        const fbIds = blocks.slice(0, markerIdx).map((b) => b.id);
+        await deleteBlocksWithRecheck(client, docId, fbIds);
+        if (markdown.trim()) {
+          await client.insertBlocks(docId, markdown, {
+            position: "before",
+            siblingId: marker.id,
+          });
+        }
+        return { markerBlockId: marker.id };
+      }
+      // 先插后删：降级插入的锚点可能是待删块，先插保锚点存在
+      if (plan.inserts.length) {
+        let insIdx = 0;
+        while (insIdx < plan.inserts.length) {
+          const anchor = plan.inserts[insIdx].anchorId;
+          const chunk: string[] = [];
+          while (
+            insIdx < plan.inserts.length &&
+            plan.inserts[insIdx].anchorId === anchor
+          ) {
+            chunk.push(plan.inserts[insIdx].markdown);
+            insIdx++;
+          }
+          await client.insertBlocks(docId, chunk.join("\n\n"), {
+            position: "before",
+            siblingId: anchor ?? marker.id,
+          });
+        }
+      }
+      if (plan.deletes.length) {
+        await deleteBlocksWithRecheck(client, docId, plan.deletes);
+      }
+      return { markerBlockId: marker.id };
+    }
+    // 匹配率不足（模板大改/结构漂移）→ 回退 P0 全量分区替换
+    const oldIds = blocks.slice(0, markerIdx).map((b) => b.id);
+    await deleteBlocksWithRecheck(client, docId, oldIds);
+    if (markdown.trim()) {
+      await client.insertBlocks(docId, markdown, {
+        position: "before",
+        siblingId: marker.id,
+      });
+    }
+    return { markerBlockId: marker.id };
+  }
+
+  // 无标记：全量替换（先插后删保底）+ 末尾建立标记块
+  const oldIds = blocks.map((b) => b.id);
+  if (markdown.trim()) {
+    await client.insertBlocks(docId, markdown, {
+      position: "end",
+      pageId: docId,
+    });
+  }
+  const markerRes = await client.insertBlocks(
+    docId,
+    PARTITION_MARKER_MARKDOWN,
+    {
+      position: "end",
+      pageId: docId,
+    },
+  );
+  // Craft 会把 `---` 拆成「分隔线 + 文本」两块：取含短语的文本块，勿取 items[0]
+  const markerItems = markerRes.items || [];
+  const markerItem =
+    markerItems.find((it) =>
+      String(it.markdown || "").includes(PARTITION_PHRASE),
+    ) ?? markerItems[markerItems.length - 1];
+  const newMarkerId = markerItem?.id;
+  await deleteBlocksWithRecheck(client, docId, oldIds);
+  return { markerBlockId: newMarkerId };
+}
+
+/** 删除块 + 失败复核重删（滞留则抛错，下次同步自愈） */
+async function deleteBlocksWithRecheck(
+  client: CraftClient,
+  docId: string,
+  oldIds: string[],
+): Promise<void> {
   if (!oldIds.length) return;
 
   const failed: string[] = [];
@@ -299,9 +443,13 @@ export async function syncItemCraft(
     const include = options?.include ?? getDefaultExtractOptions();
     const data = extractItemData(item, include);
     const title = buildNoteTitle(data, titleTemplate);
-    const markdown =
-      wpsXmlToCraftMarkdown(buildNoteXml(data, bodyTemplate)) +
-      buildSyncFootNote(data);
+    // 正文与脚注分离：脚注含同步时间（每次渲染必变），指纹只算正文，
+    // 否则幂等跳过永远不命中
+    const bodyMarkdown = wpsXmlToCraftMarkdown(
+      buildNoteXml(data, bodyTemplate),
+    );
+    const contentHash = computeContentHash(bodyMarkdown);
+    const markdown = bodyMarkdown + buildSyncFootNote(data);
     result.title = data.title;
 
     checkCancelled(options?.signal);
@@ -381,14 +529,47 @@ export async function syncItemCraft(
       }
     }
 
+    // 内容指纹跳过：渲染正文与上次写入一致（条目改了不参与同步的字段、
+    // 标签重排等渲染等价场景）→ 对齐基准后零写入返回。
+    // 要求分区标记就绪：老映射无标记时走完整流程完成首次分区建标
+    if (
+      incrementalSync &&
+      docId &&
+      mappedEntry?.lastSuccess &&
+      mappedEntry.markerBlockId &&
+      mappedEntry.contentHash &&
+      mappedEntry.contentHash === contentHash
+    ) {
+      ztoolkit.log("Content-hash craft sync: skip unchanged render", item.key);
+      recordSyncResult(item.key, {
+        success: true,
+        title: data.title,
+        craftDocId: docId,
+        noteUrl: mappedEntry.noteUrl,
+        itemModified,
+        // 存在性校验已拿到的远端现状即新基准（Craft 区手改不再触发冲突）
+        ...(remoteModified ? { noteModified: remoteModified } : {}),
+        contentHash,
+        markerBlockId: mappedEntry.markerBlockId,
+      });
+      result.success = true;
+      result.noteId = docId;
+      result.noteUrl = mappedEntry.noteUrl;
+      await writeCraftDocIdToExtra(item, docId);
+      return result;
+    }
+
     // Craft 侧改动检测：上次同步后 Craft 文档被手工修改（lastModifiedAt 晚于记录基准）。
     // 仅在条目实际变更、走完整流程时执行；条目未变的增量跳过场景由 changePoller 轮询兜底。
-    // noteModified 为 WPS 数字时间戳（目标切换场景）时 Date.parse 得 NaN，保守不触发
+    // noteModified 为 WPS 数字时间戳（目标切换场景）时 Date.parse 得 NaN，保守不触发。
+    // 分区就绪（markerBlockId 存在）时跳过检测：标记后的用户笔记区手改是预期行为，
+    // 标记前的 Zotero 区本就以 Zotero 为准会被安全覆盖，两者都不构成冲突
     if (
       docId &&
       mappedEntry?.lastSuccess &&
       mappedEntry.noteModified &&
-      remoteModified
+      remoteModified &&
+      !mappedEntry.markerBlockId
     ) {
       const prev = Date.parse(mappedEntry.noteModified);
       const curr = Date.parse(remoteModified);
@@ -522,8 +703,15 @@ export async function syncItemCraft(
 
     // 写入。映射文档在回收站时可读不可写（存在性校验的 fetchBlocks 照常 200，
     // POST /blocks 才报 400 "Cannot modify document in trash"）：清映射并本次自动重建
+    let newMarkerId = mappedEntry?.markerBlockId;
     try {
-      await replaceDocumentContent(client, docId, markdown);
+      const replaced = await replaceDocumentContent(
+        client,
+        docId,
+        markdown,
+        mappedEntry?.markerBlockId,
+      );
+      newMarkerId = replaced.markerBlockId || newMarkerId;
     } catch (e) {
       if (
         e instanceof CraftError &&
@@ -542,7 +730,8 @@ export async function syncItemCraft(
         }
         docId = doc.id;
         wasCreated = true;
-        await replaceDocumentContent(client, docId, markdown);
+        const replaced = await replaceDocumentContent(client, docId, markdown);
+        newMarkerId = replaced.markerBlockId;
       } else {
         throw e;
       }
@@ -571,6 +760,8 @@ export async function syncItemCraft(
       itemModified,
       // 读取失败（空串）时不传，避免空值覆盖既有基准
       ...(effectiveModified ? { noteModified: effectiveModified } : {}),
+      contentHash,
+      ...(newMarkerId ? { markerBlockId: newMarkerId } : {}),
     });
     await writeCraftDocIdToExtra(item, docId);
 

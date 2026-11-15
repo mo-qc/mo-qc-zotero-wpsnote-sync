@@ -368,9 +368,16 @@ export class CraftClient {
   async insertBlocks(
     pageId: string,
     markdown: string,
+    position?: {
+      position: "start" | "end" | "before" | "after";
+      pageId?: string;
+      siblingId?: string;
+    },
   ): Promise<{ items: CraftBlock[] }> {
-    // 大文档单请求会 413：按安全边界分块、顺序 append（单块时行为与原先一致）
+    // 大文档单请求会 413：按安全边界分块、顺序 append（单块时行为与原先一致）。
+    // before/after 模式多块插同一 sibling：每块都落在目标块紧邻侧，顺序保持
     const chunks = splitMarkdownForInsert(markdown, INSERT_CHUNK_BYTES);
+    const pos = position || { position: "end" as const, pageId };
     const items: CraftBlock[] = [];
     for (const chunk of chunks) {
       const r: { items: CraftBlock[] } = await this.request(
@@ -379,7 +386,7 @@ export class CraftClient {
         undefined,
         {
           blocks: [{ type: "text", markdown: chunk }],
-          position: { position: "end", pageId },
+          position: pos,
         },
       );
       if (r.items) items.push(...r.items);
