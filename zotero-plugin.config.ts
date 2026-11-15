@@ -4,7 +4,9 @@ import pkg from "./package.json";
 export default defineConfig({
   source: ["src", "addon"],
   dist: ".scaffold/build",
-  name: pkg.config.addonName,
+  // xpi 文件名与 update_link 必须是 ASCII：GitHub Release 会剥离资产名里的
+  // 非 ASCII 字符，导致带中文的下载/更新链接 404。插件显示名仍用 addonName。
+  name: "zotero-wps-craft-notes-sync",
   id: pkg.config.addonID,
   namespace: pkg.config.addonRef,
   updateURL: `https://github.com/mo-qc/mo-qc-zotero-wpsnote-sync/releases/download/release/${

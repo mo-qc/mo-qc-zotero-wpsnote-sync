@@ -34,8 +34,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 不用 npm run build：它会先 bump 版本，导致 CI 产出的 xpi 比 tag 大 1。
+      # 版本在本地开发/发版时 bump，CI 只按仓库里的版本构建。
       - name: Build plugin
-        run: npm run build
+        run: npx zotero-plugin build && npx tsc --noEmit
 
       - name: Get version
         id: get_version
