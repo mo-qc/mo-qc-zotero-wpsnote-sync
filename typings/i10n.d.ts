@@ -11,6 +11,8 @@ export type FluentMessageId =
   | 'menu-sync-history'
   | 'menu-sync-to-wpsnote'
   | 'pref-autoSyncEnabled'
+  | 'pref-autoSyncLibraries'
+  | 'pref-autoSyncLibraries-help'
   | 'pref-autoSyncOnModify'
   | 'pref-autoSyncTag'
   | 'pref-autoSyncTag-help'

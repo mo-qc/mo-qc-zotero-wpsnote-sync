@@ -12,6 +12,7 @@ import {
   setCraftApiToken,
   getCraftConfig,
   setPref,
+  getAutoSyncLibraryIds,
 } from "../utils/prefs";
 import { WpsMcpClient } from "./wpsMcpClient";
 import { CraftClient } from "./craftClient";
@@ -127,9 +128,78 @@ function getElement<T extends HTMLElement>(id: string): T | null {
   return doc.getElementById(id) as T | null;
 }
 
+/** 库类型展示名（设置页文献库多选） */
+const LIBRARY_TYPE_LABELS: Record<string, string> = {
+  user: "个人库",
+  group: "群组库",
+  feed: "订阅",
+};
+/**
+ * 动态生成"同步的文献库"多选列表。
+ * 未配置时按默认状态展示（订阅不勾、其余勾）；用户任一勾选变化即
+ * 落盘显式白名单，此后严格按所选库同步。
+ */
+function buildLibraryList(doc: Document) {
+  const container = doc.getElementById(
+    `zotero-prefpane-${config.addonRef}-libraryList`,
+  );
+  if (!container) return;
+  container.replaceChildren();
+
+  let libs: Array<{ libraryID: number; libraryType: string; name: string }> =
+    [];
+  try {
+    libs = (Zotero.Libraries.getAll() as any[]).filter(
+      (l) =>
+        l.visible !== false &&
+        (l.libraryType === "user" ||
+          l.libraryType === "group" ||
+          l.libraryType === "feed"),
+    );
+  } catch (e) {
+    ztoolkit.log("buildLibraryList: Libraries.getAll failed", e);
+  }
+
+  const configured = getAutoSyncLibraryIds();
+
+  for (const lib of libs) {
+    const checked = configured
+      ? configured.includes(lib.libraryID)
+      : lib.libraryType !== "feed";
+
+    const row = doc.createElement("label");
+    row.className = "zws-checkbox-row";
+    row.style.marginBottom = "6px";
+
+    const input = doc.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    input.id = `zotero-prefpane-${config.addonRef}-lib-${lib.libraryID}`;
+    input.dataset.libraryid = String(lib.libraryID);
+
+    const lbl = doc.createElement("label");
+    lbl.htmlFor = input.id;
+    lbl.textContent = `${lib.name}（${LIBRARY_TYPE_LABELS[lib.libraryType] || lib.libraryType}）`;
+
+    input.addEventListener("change", () => {
+      const ids = Array.from(container.querySelectorAll("input[type=checkbox]"))
+        .map((el) => el as HTMLInputElement)
+        .filter((el) => el.checked)
+        .map((el) => Number(el.dataset.libraryid))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      setPref("autoSyncLibraries", JSON.stringify(ids));
+    });
+
+    row.append(input, lbl);
+    container.append(row);
+  }
+}
+
 function bindPrefEvents() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
+
+  buildLibraryList(doc);
 
   const titleInput = doc.getElementById(
     `zotero-prefpane-${config.addonRef}-titleTemplate`,

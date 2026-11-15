@@ -72,6 +72,41 @@ export function setLocalMcpToken(value: string): void {
   setPref("localMcpToken", trimmed ? encryptString(trimmed) : "");
 }
 
+/**
+ * 自动同步的文献库白名单。
+ * 返回 null 表示未配置（默认行为：排除订阅 feed 库、其余全同步）；
+ * 返回数组表示用户显式选择（空数组 = 全部不同步）。
+ */
+export function getAutoSyncLibraryIds(): number[] | null {
+  try {
+    const raw = String(getPref("autoSyncLibraries") || "").trim();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 某条目的所属库是否参与自动同步。
+ * - 已配置白名单：严格按名单（空名单 = 全不同步）。
+ * - 未配置：排除订阅(feed)库，其余同步——订阅文献更新不触发同步。
+ * 库信息取不到时保守不同步，避免误推订阅内容。
+ */
+export function isAutoSyncLibrary(libraryID: number): boolean {
+  const list = getAutoSyncLibraryIds();
+  if (list !== null) return list.includes(libraryID);
+  try {
+    const lib = Zotero.Libraries.get(libraryID);
+    // Zotero 10：库类型字段是 libraryType（"user"/"group"/"feed"），不是 type
+    return !!lib && (lib as any).libraryType !== "feed";
+  } catch {
+    return false;
+  }
+}
+
 /** 同步目标：wps（默认）或 craft */
 export function getSyncTarget(): "wps" | "craft" {
   const v = String(getPref("syncTarget") || "wps");

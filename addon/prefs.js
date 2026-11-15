@@ -19,6 +19,9 @@ pref("syncIncludeNotes", true);
 pref("autoSyncEnabled", false);
 pref("autoSyncOnModify", false);
 pref("autoSyncTag", "");
+// 自动同步的文献库白名单（JSON 数组的 libraryID）。空 = 未配置：
+// 默认同步除订阅(feed)库外的所有库；配置后严格按所选库同步。
+pref("autoSyncLibraries", "");
 pref("syncConcurrency", 2);
 pref("changePollEnabled", true);
 pref("changePollInterval", 30);

@@ -28,6 +28,7 @@ declare namespace _ZoteroTypes {
       "autoSyncEnabled": boolean;
       "autoSyncOnModify": boolean;
       "autoSyncTag": string;
+      "autoSyncLibraries": string;
       "syncConcurrency": number;
       "changePollEnabled": boolean;
       "changePollInterval": number;

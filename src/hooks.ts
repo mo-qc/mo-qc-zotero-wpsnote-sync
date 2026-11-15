@@ -28,7 +28,7 @@ import { registerAgentTools, unregisterAgentTools } from "./modules/agentTools";
 import { registerMcpServer, unregisterMcpServer } from "./modules/mcpServer";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { htmlToWpsXml } from "./utils/htmlToWps";
-import { getPref } from "./utils/prefs";
+import { getPref, isAutoSyncLibrary } from "./utils/prefs";
 import {
   getMappedEntry,
   removeMappedNote,
@@ -322,6 +322,9 @@ async function onNotify(
     // 批注/附件修改时，需要找到其归属的常规条目
     const item = resolveRegularItem(rawItem);
     if (!item) continue;
+
+    // 文献库范围：未配置时默认排除订阅(feed)库；配置后按白名单
+    if (!isAutoSyncLibrary(item.libraryID)) continue;
 
     const itemKey = item.key;
     if (syncingItems.has(itemKey)) continue;
