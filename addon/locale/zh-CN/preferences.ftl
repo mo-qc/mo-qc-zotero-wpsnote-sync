@@ -38,7 +38,7 @@ pref-bodyTemplate-help = 语法：双大括号变量会转义输出，三重大�
 pref-changePollEnabled = 启用远端改动轮询提醒
 pref-changePollInterval = 轮询间隔（分钟）
 pref-changePoll-help = 定期检查已同步笔记在 WPS/Craft 端是否被修改，发现改动时弹窗提醒，由你决定是否拉取回 Zotero；不会自动覆盖任何一边
-pref-help = { $name } Build { $version } { $time }
+pref-help = Build { $version }
 
 # MCP Server（对外接口）
 pref-mcpServerWriteEnabled = 允许外部 MCP 客户端写操作（同步 / 回流）
@@ -71,3 +71,17 @@ pref-colorSemanticMap = 颜色语义映射（JSON，可选）
 pref-colorSemanticMap-help = 例如 {"{"}“#7fba00”:“核心结论”,“#ff6666”:“存疑待验证”{"}"}：把 Zotero 标注颜色映射为批注分组标题的语义名；留空则用默认颜色名（绿色/红色…）。解析失败时自动忽略，不影响同步
 pref-craftArchiveByTag = 按首标签自动归档到子文件夹
 pref-craftArchiveByTag-help = 开启后，新建的 Craft 文档会按条目的第一个标签找/建同名子文件夹并放入（在「目标文件夹」下创建）；已有文档位置不变，归档失败自动回落默认文件夹，不影响同步
+
+# 设置页卡片与标签页标题
+pref-card-syncOptions = 同步选项
+pref-card-autoSync = 自动同步
+pref-card-changePoll = 远端改动提醒
+pref-card-mcpConnection = MCP 连接
+pref-card-craftConnection = Craft 连接
+pref-card-mcpServer = MCP Server（对外接口）
+pref-card-reading = 阅读体验
+pref-card-template = 模板与预览
+pref-tab-sync = 同步
+pref-tab-connection = 连接
+pref-tab-template = 模板与预览
+pref-tab-reading = 阅读

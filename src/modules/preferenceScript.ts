@@ -167,9 +167,9 @@ function buildLibraryList(doc: Document) {
       ? configured.includes(lib.libraryID)
       : lib.libraryType !== "feed";
 
-    const row = doc.createElement("label");
+    const XHTML_NS = "http://www.w3.org/1999/xhtml";
+    const row = doc.createElementNS(XHTML_NS, "label");
     row.className = "zws-checkbox-row";
-    row.style.marginBottom = "6px";
 
     const input = doc.createElement("input");
     input.type = "checkbox";
@@ -177,8 +177,7 @@ function buildLibraryList(doc: Document) {
     input.id = `zotero-prefpane-${config.addonRef}-lib-${lib.libraryID}`;
     input.dataset.libraryid = String(lib.libraryID);
 
-    const lbl = doc.createElement("label");
-    lbl.htmlFor = input.id;
+    const lbl = doc.createElementNS(XHTML_NS, "span");
     lbl.textContent = `${lib.name}（${LIBRARY_TYPE_LABELS[lib.libraryType] || lib.libraryType}）`;
 
     input.addEventListener("change", () => {

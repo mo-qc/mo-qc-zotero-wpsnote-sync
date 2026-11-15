@@ -22,22 +22,22 @@
     "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
     --zws-font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
     Consolas, "PingFang SC", monospace; font-family: var(--zws-font); color:
-    var(--zws-text); line-height: 1.5; padding: 32px 24px; max-width: 720px;
-    margin: 0 auto; } .zws-prefs-header { display: flex; align-items: center;
-    gap: 12px; margin-bottom: 24px; } .zws-prefs-header h2 { font-size: 20px;
-    font-weight: 600; margin: 0; color: var(--zws-text); white-space: nowrap;
-    flex-shrink: 0; } .zws-prefs-header .zws-version { font-size: 12px; color:
-    var(--zws-text-muted); margin-left: auto; text-align: right; min-width: 0; }
-    .zws-card { background: var(--zws-bg); border: 1px solid var(--zws-border);
-    border-radius: var(--zws-radius-lg); box-shadow: var(--zws-shadow-sm);
-    padding: var(--zws-gap-lg); margin-bottom: 20px; } .zws-card:last-child {
+    var(--zws-text); line-height: 1.5; box-sizing: border-box; width: 100%;
+    padding: 32px 24px; max-width: 720px; margin: 0 auto; } .zws-prefs-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .zws-prefs-header h2 { font-size: 20px; font-weight: 600; margin: 0; color:
+    var(--zws-text); white-space: nowrap; flex-shrink: 0; } .zws-prefs-header
+    .zws-version { font-size: 12px; color: var(--zws-text-muted); margin-left:
+    auto; text-align: right; min-width: 0; } .zws-card { background:
+    var(--zws-bg); border: 1px solid var(--zws-border); border-radius:
+    var(--zws-radius-lg); box-shadow: var(--zws-shadow-sm); padding:
+    var(--zws-gap-lg); margin-bottom: 20px; } .zws-card:last-child {
     margin-bottom: 0; } .zws-card-title { font-size: 14px; font-weight: 600;
-    color: var(--zws-text); margin: 0 0 var(--zws-gap-md) 0; padding-bottom:
-    var(--zws-gap-sm); border-bottom: 1px solid var(--zws-border); }
-    .zws-form-row { display: flex; align-items: center; gap: var(--zws-gap-md);
-    margin-bottom: var(--zws-gap-md); } .zws-form-row:last-child {
-    margin-bottom: 0; } .zws-form-row.zws-top { align-items: flex-start; }
-    .zws-label { min-width: 120px; max-width: 120px; font-size: 13px;
+    color: var(--zws-text); margin: 0; padding-bottom: var(--zws-gap-sm);
+    border-bottom: 1px solid var(--zws-border); } .zws-form-row { display: flex;
+    align-items: center; gap: var(--zws-gap-md); } .zws-form-row.zws-top {
+    align-items: flex-start; } .zws-form-row.zws-top .zws-label { padding-top:
+    8px; } .zws-label { min-width: 120px; max-width: 120px; font-size: 13px;
     font-weight: 500; color: var(--zws-text-secondary); flex-shrink: 0;
     padding-top: 7px; } .zws-input, .zws-select, .zws-textarea { flex: 1;
     min-width: 0; box-sizing: border-box; font-family: var(--zws-font);
@@ -48,11 +48,14 @@
     { border-color: #94a3b8; } .zws-input:focus, .zws-select:focus,
     .zws-textarea:focus { border-color: var(--zws-primary); box-shadow: 0 0 0
     3px var(--zws-primary-ring); } .zws-textarea { width: 100%; resize:
-    vertical; line-height: 1.6; } .zws-menulist { flex: 1; min-width: 0;
-    font-family: var(--zws-font); font-size: 13px; } .zws-checkbox-grid {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px
-    24px; } .zws-checkbox-row { display: flex; align-items: center; gap:
-    var(--zws-gap-sm); font-size: 13px; color: var(--zws-text-secondary);
+    vertical; line-height: 1.6; } .zws-input[type="number"] { max-width: 140px;
+    } .zws-field { flex: 1; min-width: 0; } .zws-mono { font-family:
+    var(--zws-font-mono); } .zws-menulist { flex: 1; min-width: 0; font-family:
+    var(--zws-font); font-size: 13px; } .zws-checkbox-grid { display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+    .zws-check-group, .zws-checkbox-stack { display: flex; flex-direction:
+    column; gap: 10px; } .zws-checkbox-row { display: flex; align-items: center;
+    gap: var(--zws-gap-sm); font-size: 13px; color: var(--zws-text-secondary);
     cursor: pointer; user-select: none; } .zws-checkbox-row
     input[type="checkbox"] { width: 16px; height: 16px; accent-color:
     var(--zws-primary); cursor: pointer; flex-shrink: 0; } .zws-help-text {
@@ -63,12 +66,11 @@
     font-family: var(--zws-font-mono); font-size: 12px; color:
     var(--zws-text-secondary); line-height: 1.6; white-space: pre-wrap;
     overflow: auto; max-height: 240px; } .zws-preview-label { font-size: 13px;
-    font-weight: 500; color: var(--zws-text-secondary); margin: 14px 0 6px 0;
-    display: block; } .zws-preview-label:first-child { margin-top: 0; }
-    .zws-hidden { display: none !important; } .zws-mcp-status { font-size: 12px;
-    margin-top: var(--zws-gap-sm); padding: 6px 10px; border-radius:
-    var(--zws-radius-sm); line-height: 1.5; } .zws-mcp-status.ok { color:
-    var(--zws-success-text); background: var(--zws-success-subtle); }
+    font-weight: 500; color: var(--zws-text-secondary); margin: 0; display:
+    block; } .zws-hidden { display: none !important; } .zws-mcp-status {
+    font-size: 12px; margin-top: var(--zws-gap-sm); padding: 6px 10px;
+    border-radius: var(--zws-radius-sm); line-height: 1.5; } .zws-mcp-status.ok
+    { color: var(--zws-success-text); background: var(--zws-success-subtle); }
     .zws-mcp-status.error { color: var(--zws-error-text); background:
     var(--zws-error-subtle); } .zws-mcp-status.fallback { color:
     var(--zws-warning-text); background: var(--zws-warning-subtle); }
@@ -83,68 +85,75 @@
     } .zws-mcp-test-result.ok { color: var(--zws-success-text); }
     .zws-mcp-test-result.error { color: var(--zws-error-text); }
     .zws-mcp-test-result.pending { color: var(--zws-text-muted); }
-    .zws-var-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top:
-    var(--zws-gap-sm); } .zws-chip { font-family: var(--zws-font-mono);
-    font-size: 12px; padding: 3px 10px; color: var(--zws-text-secondary);
-    background: var(--zws-surface); border: 1px solid var(--zws-border-strong);
-    border-radius: 999px; cursor: pointer; transition: all 0.15s; }
-    .zws-chip:hover { color: var(--zws-primary); border-color:
-    var(--zws-primary); background: var(--zws-primary-ring); } .zws-preset-hint
-    { font-family: var(--zws-font); font-size: 12px; color:
+    .zws-var-chips { display: flex; flex-wrap: wrap; gap: 6px; } .zws-chip {
+    font-family: var(--zws-font-mono); font-size: 12px; padding: 3px 10px;
+    color: var(--zws-text-secondary); background: var(--zws-surface); border:
+    1px solid var(--zws-border-strong); border-radius: 999px; cursor: pointer;
+    transition: all 0.15s; } .zws-chip:hover { color: var(--zws-primary);
+    border-color: var(--zws-primary); background: var(--zws-primary-ring); }
+    .zws-preset-hint { font-family: var(--zws-font); font-size: 12px; color:
     var(--zws-text-secondary); align-self: center; margin-right: 2px; }
-    .zws-view-bar { display: flex; align-items: center; gap: 8px; margin: 14px 0
-    6px 0; } .zws-view-bar .zws-preview-label { margin: 0; flex: 1; }
-    .zws-preview-source { font-size: 11px; color: var(--zws-text-secondary);
-    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space:
-    nowrap; } .zws-view-switch { display: flex; gap: 0; border: 1px solid
-    var(--zws-border-strong); border-radius: var(--zws-radius-md); overflow:
-    hidden; } .zws-view-btn { font-family: var(--zws-font); font-size: 12px;
-    padding: 4px 12px; color: var(--zws-text-secondary); background:
-    var(--zws-bg); border: none; cursor: pointer; transition: all 0.15s; }
-    .zws-view-btn + .zws-view-btn { border-left: 1px solid
-    var(--zws-border-strong); } .zws-view-btn.active { color: #ffffff;
-    background: var(--zws-primary); } .zws-render-view { background:
-    var(--zws-bg); border: 1px solid var(--zws-border-strong); border-radius:
-    var(--zws-radius-md); padding: 12px 14px; font-family: var(--zws-font);
-    font-size: 13px; color: var(--zws-text); line-height: 1.7; overflow: auto;
-    max-height: 360px; min-height: 120px; } .zws-render-view .rv-h { margin:
-    10px 0 6px 0; font-weight: 600; color: var(--zws-text); } .zws-render-view
-    h1.rv-h { font-size: 18px; } .zws-render-view h2.rv-h { font-size: 16px; }
-    .zws-render-view h3.rv-h, .zws-render-view h4.rv-h, .zws-render-view
-    h5.rv-h, .zws-render-view h6.rv-h { font-size: 14px; } .zws-render-view
-    .rv-p { margin: 4px 0; } .zws-render-view .rv-li { position: relative; }
-    .zws-render-view .rv-marker { position: absolute; left: 0; color:
-    var(--zws-text-muted); } .zws-render-view .rv-quote { margin: 6px 0;
-    padding: 4px 12px; border-left: 3px solid var(--zws-primary); color:
-    var(--zws-text-secondary); background: var(--zws-surface); }
-    .zws-render-view .rv-code { font-family: var(--zws-font-mono); font-size:
-    12px; background: var(--zws-surface); padding: 1px 5px; border-radius: 4px;
-    } .zws-render-view .rv-a { color: var(--zws-primary); } .zws-render-view
-    .rv-hl { display: flex; gap: 8px; border: 1px solid; border-radius:
-    var(--zws-radius-md); padding: 8px 10px; margin: 6px 0; } .zws-render-view
-    .rv-hl-body { flex: 1; min-width: 0; } .zws-render-view .rv-hr { border:
-    none; border-top: 1px solid var(--zws-border); margin: 8px 0; }
-    .zws-render-view .rv-table { border-collapse: collapse; margin: 6px 0; }
-    .zws-render-view .rv-td { border: 1px solid var(--zws-border-strong);
-    padding: 4px 8px; } .zws-render-view .rv-cols { display: flex; gap: 8px;
-    margin: 6px 0; } .zws-render-view .rv-col { flex: 1; min-width: 0; padding:
-    6px; border: 1px dashed var(--zws-border-strong); border-radius:
-    var(--zws-radius-sm); } .zws-render-view .rv-pre { font-family:
+    .zws-view-bar { display: flex; align-items: center; gap: 8px; margin: 0; }
+    .zws-view-bar .zws-preview-label { margin: 0; flex: 1; white-space: nowrap;
+    } .zws-preview-source { font-size: 11px; color: var(--zws-text-secondary);
+    max-width: 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; } .zws-view-switch { display: flex; gap: 0; border: 1px
+    solid var(--zws-border-strong); border-radius: var(--zws-radius-md);
+    overflow: hidden; flex-shrink: 0; } .zws-view-btn { font-family:
+    var(--zws-font); font-size: 12px; padding: 4px 12px; color:
+    var(--zws-text-secondary); background: var(--zws-bg); border: none; cursor:
+    pointer; transition: all 0.15s; flex-shrink: 0; } .zws-view-btn +
+    .zws-view-btn { border-left: 1px solid var(--zws-border-strong); }
+    .zws-view-btn.active { color: #ffffff; background: var(--zws-primary); }
+    .zws-render-view { background: var(--zws-bg); border: 1px solid
+    var(--zws-border-strong); border-radius: var(--zws-radius-md); padding: 12px
+    14px; font-family: var(--zws-font); font-size: 13px; color: var(--zws-text);
+    line-height: 1.7; overflow: auto; max-height: 360px; min-height: 120px; }
+    .zws-render-view .rv-h { margin: 10px 0 6px 0; font-weight: 600; color:
+    var(--zws-text); } .zws-render-view h1.rv-h { font-size: 18px; }
+    .zws-render-view h2.rv-h { font-size: 16px; } .zws-render-view h3.rv-h,
+    .zws-render-view h4.rv-h, .zws-render-view h5.rv-h, .zws-render-view h6.rv-h
+    { font-size: 14px; } .zws-render-view .rv-p { margin: 4px 0; }
+    .zws-render-view .rv-li { position: relative; } .zws-render-view .rv-marker
+    { position: absolute; left: 0; color: var(--zws-text-muted); }
+    .zws-render-view .rv-quote { margin: 6px 0; padding: 4px 12px; border-left:
+    3px solid var(--zws-primary); color: var(--zws-text-secondary); background:
+    var(--zws-surface); } .zws-render-view .rv-code { font-family:
     var(--zws-font-mono); font-size: 12px; background: var(--zws-surface);
-    padding: 8px 10px; border-radius: var(--zws-radius-sm); overflow: auto;
-    white-space: pre-wrap; } .zws-render-view .rv-img, .zws-render-view
-    .rv-ainote { color: var(--zws-text-muted); font-size: 12px; }
-    .zws-render-empty { color: var(--zws-text-muted); font-size: 12px; }
-    .zws-tabs { display: flex; flex-direction: column; gap: 14px; } .zws-tab-bar
-    { display: flex; gap: 4px; border-bottom: 1px solid var(--zws-border); }
-    .zws-tab { appearance: none; background: none; border: none; border-bottom:
-    2px solid transparent; padding: 9px 16px; font-size: 13.5px; font-weight:
-    500; color: var(--zws-text-secondary); cursor: pointer; border-radius: 6px
-    6px 0 0; } .zws-tab:hover { color: var(--zws-text); background:
-    var(--zws-surface); } .zws-tab.active { color: var(--zws-primary);
-    border-bottom-color: var(--zws-primary); font-weight: 600; } .zws-tab-panel
-    { display: none; flex-direction: column; gap: 14px; } .zws-tab-panel.active
-    { display: flex; }
+    padding: 1px 5px; border-radius: 4px; } .zws-render-view .rv-a { color:
+    var(--zws-primary); } .zws-render-view .rv-hl { display: flex; gap: 8px;
+    border: 1px solid; border-radius: var(--zws-radius-md); padding: 8px 10px;
+    margin: 6px 0; } .zws-render-view .rv-hl-body { flex: 1; min-width: 0; }
+    .zws-render-view .rv-hr { border: none; border-top: 1px solid
+    var(--zws-border); margin: 8px 0; } .zws-render-view .rv-table {
+    border-collapse: collapse; margin: 6px 0; } .zws-render-view .rv-td {
+    border: 1px solid var(--zws-border-strong); padding: 4px 8px; }
+    .zws-render-view .rv-cols { display: flex; gap: 8px; margin: 6px 0; }
+    .zws-render-view .rv-col { flex: 1; min-width: 0; padding: 6px; border: 1px
+    dashed var(--zws-border-strong); border-radius: var(--zws-radius-sm); }
+    .zws-render-view .rv-pre { font-family: var(--zws-font-mono); font-size:
+    12px; background: var(--zws-surface); padding: 8px 10px; border-radius:
+    var(--zws-radius-sm); overflow: auto; white-space: pre-wrap; }
+    .zws-render-view .rv-img, .zws-render-view .rv-ainote { color:
+    var(--zws-text-muted); font-size: 12px; } .zws-render-empty { color:
+    var(--zws-text-muted); font-size: 12px; } .zws-tabs { display: flex;
+    flex-direction: column; gap: 14px; } .zws-tab-bar { display: flex; gap: 4px;
+    border-bottom: 1px solid var(--zws-border); } .zws-tab { appearance: none;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    padding: 9px 16px; font-size: 13.5px; font-weight: 500; color:
+    var(--zws-text-secondary); cursor: pointer; border-radius: 6px 6px 0 0; }
+    .zws-tab:hover { color: var(--zws-text); background: var(--zws-surface); }
+    .zws-tab.active { color: var(--zws-primary); border-bottom-color:
+    var(--zws-primary); font-weight: 600; } .zws-tab-panel { display: none;
+    flex-direction: column; gap: 14px; } .zws-tab-panel.active { display: flex;
+    } /* 卡片内相邻块统一 16px 间距（置于末尾以覆盖旧 margin） */ .zws-card > *
+    + * { margin-top: var(--zws-gap-md); } /* help 紧贴所属控件： 表单行后 8px
+    且对齐控件列；复选组后 8px 顶格 */ .zws-form-row + .zws-help-text {
+    margin-top: 8px; margin-left: calc(120px + var(--zws-gap-md)); }
+    .zws-check-group + .zws-help-text { margin-top: 8px; } /*
+    预览标签/视图栏紧贴其预览区 */ .zws-preview-label + .zws-textarea,
+    .zws-preview-label + .zws-render-view, .zws-view-bar + .zws-render-view,
+    .zws-view-bar + .zws-textarea { margin-top: 6px; }
   </html:style>
 
   <html:div class="zws-prefs-root">
@@ -171,23 +180,42 @@
 
     <html:div class="zws-tabs">
       <html:div class="zws-tab-bar" role="tablist">
-        <html:button type="button" class="zws-tab active" data-tab="sync">
-          同步
-        </html:button>
-        <html:button type="button" class="zws-tab" data-tab="connection">
-          连接
-        </html:button>
-        <html:button type="button" class="zws-tab" data-tab="template">
-          模板与预览
-        </html:button>
-        <html:button type="button" class="zws-tab" data-tab="reading">
-          阅读
-        </html:button>
+        <html:button
+          type="button"
+          class="zws-tab active"
+          data-tab="sync"
+          data-l10n-id="pref-tab-sync"
+          >同步</html:button
+        >
+        <html:button
+          type="button"
+          class="zws-tab"
+          data-tab="connection"
+          data-l10n-id="pref-tab-connection"
+          >连接</html:button
+        >
+        <html:button
+          type="button"
+          class="zws-tab"
+          data-tab="template"
+          data-l10n-id="pref-tab-template"
+          >模板与预览</html:button
+        >
+        <html:button
+          type="button"
+          class="zws-tab"
+          data-tab="reading"
+          data-l10n-id="pref-tab-reading"
+          >阅读</html:button
+        >
       </html:div>
 
       <html:div class="zws-tab-panel" data-panel="reading">
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">阅读体验</html:h3>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-reading"
+          ></html:h3>
           <html:div class="zws-form-row">
             <html:label
               class="zws-label"
@@ -223,17 +251,12 @@
               for="zotero-prefpane-__addonRef__-colorSemanticMap"
               data-l10n-id="pref-colorSemanticMap"
             ></html:label>
-            <html:div style="flex: 1; min-width: 0">
+            <html:div class="zws-field">
               <html:textarea
-                class="zws-textarea"
+                class="zws-textarea zws-mono"
                 id="zotero-prefpane-__addonRef__-colorSemanticMap"
                 preference="colorSemanticMap"
                 rows="4"
-                style="
-                  font-family:
-                    &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
-                    &quot;Roboto Mono&quot;, Consolas, monospace;
-                "
               ></html:textarea>
             </html:div>
           </html:div>
@@ -246,7 +269,10 @@
 
       <html:div class="zws-tab-panel" data-panel="connection">
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">MCP 连接</html:h3>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-mcpConnection"
+          ></html:h3>
           <html:div class="zws-form-row">
             <html:label
               class="zws-label"
@@ -291,23 +317,18 @@
             data-l10n-id="pref-mcpAuth-help"
           ></html:p>
 
-          <html:div class="zws-form-row zws-top" style="margin-top: 16px">
+          <html:div class="zws-form-row zws-top">
             <html:label
               class="zws-label"
               for="zotero-prefpane-__addonRef__-mcpConfigJson"
               data-l10n-id="pref-mcpConfigJson"
             ></html:label>
-            <html:div style="flex: 1; min-width: 0">
+            <html:div class="zws-field">
               <html:textarea
-                class="zws-textarea"
+                class="zws-textarea zws-mono"
                 id="zotero-prefpane-__addonRef__-mcpConfigJson"
                 preference="mcpConfigJson"
                 rows="6"
-                style="
-                  font-family:
-                    &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
-                    &quot;Roboto Mono&quot;, Consolas, monospace;
-                "
               ></html:textarea>
               <html:p
                 class="zws-help-text"
@@ -335,7 +356,10 @@
         </html:div>
 
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">Craft 连接</html:h3>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-craftConnection"
+          ></html:h3>
           <html:div class="zws-form-row">
             <html:label
               class="zws-label"
@@ -396,20 +420,22 @@
             data-l10n-id="pref-craftFolderId-help"
           ></html:p>
 
-          <label class="zws-checkbox-row" style="margin-top: 4px">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-craftArchiveByTag"
-              preference="craftArchiveByTag"
-            ></html:input>
-            <span data-l10n-id="pref-craftArchiveByTag"></span>
-          </label>
+          <html:div class="zws-check-group">
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-craftArchiveByTag"
+                preference="craftArchiveByTag"
+              ></html:input>
+              <html:span data-l10n-id="pref-craftArchiveByTag"></html:span>
+            </html:label>
+          </html:div>
           <html:p
             class="zws-help-text"
             data-l10n-id="pref-craftArchiveByTag-help"
           ></html:p>
 
-          <html:div class="zws-mcp-test-row" style="margin-top: 12px">
+          <html:div class="zws-mcp-test-row">
             <html:button
               type="button"
               class="zws-btn"
@@ -425,19 +451,21 @@
         </html:div>
 
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">MCP Server（对外接口）</html:h3>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-mcpServer"
+          ></html:h3>
 
-          <label class="zws-checkbox-row" style="margin-bottom: 12px">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-mcpServerWriteEnabled"
-              preference="mcpServerWriteEnabled"
-            ></html:input>
-            <html:label
-              for="zotero-prefpane-__addonRef__-mcpServerWriteEnabled"
-              data-l10n-id="pref-mcpServerWriteEnabled"
-            ></html:label>
-          </label>
+          <html:div class="zws-check-group">
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-mcpServerWriteEnabled"
+                preference="mcpServerWriteEnabled"
+              ></html:input>
+              <html:span data-l10n-id="pref-mcpServerWriteEnabled"></html:span>
+            </html:label>
+          </html:div>
 
           <html:div class="zws-form-row">
             <html:label
@@ -462,29 +490,28 @@
 
       <html:div class="zws-tab-panel active" data-panel="sync">
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">同步目标</html:h3>
-          <label class="zws-checkbox-row">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-syncTargetWps"
-              preference="syncTargetWps"
-            ></html:input>
-            <html:label
-              for="zotero-prefpane-__addonRef__-syncTargetWps"
-              data-l10n-id="pref-syncTarget-wps"
-            ></html:label>
-          </label>
-          <label class="zws-checkbox-row" style="margin-top: 6px">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-syncTargetCraft"
-              preference="syncTargetCraft"
-            ></html:input>
-            <html:label
-              for="zotero-prefpane-__addonRef__-syncTargetCraft"
-              data-l10n-id="pref-syncTarget-craft"
-            ></html:label>
-          </label>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-syncTarget"
+          ></html:h3>
+          <html:div class="zws-check-group">
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-syncTargetWps"
+                preference="syncTargetWps"
+              ></html:input>
+              <html:span data-l10n-id="pref-syncTarget-wps"></html:span>
+            </html:label>
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-syncTargetCraft"
+                preference="syncTargetCraft"
+              ></html:input>
+              <html:span data-l10n-id="pref-syncTarget-craft"></html:span>
+            </html:label>
+          </html:div>
           <html:p
             class="zws-help-text"
             data-l10n-id="pref-syncTarget-help"
@@ -492,7 +519,10 @@
         </html:div>
 
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">同步选项</html:h3>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-syncOptions"
+          ></html:h3>
           <html:div class="zws-form-row">
             <html:label
               class="zws-label"
@@ -528,41 +558,32 @@
           ></html:p>
 
           <html:div class="zws-checkbox-grid">
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-updateExisting"
                 preference="updateExisting"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-updateExisting"
-                data-l10n-id="pref-updateExisting"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-updateExisting"></html:span>
+            </html:label>
 
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-incrementalSync"
                 preference="incrementalSync"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-incrementalSync"
-                data-l10n-id="pref-incrementalSync"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-incrementalSync"></html:span>
+            </html:label>
 
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-promptOnConflict"
                 preference="promptOnConflict"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-promptOnConflict"
-                data-l10n-id="pref-promptOnConflict"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-promptOnConflict"></html:span>
+            </html:label>
           </html:div>
         </html:div>
 
@@ -572,93 +593,76 @@
             data-l10n-id="pref-syncInclude-title"
           ></html:h3>
           <html:div class="zws-checkbox-grid">
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-syncIncludeAbstract"
                 preference="syncIncludeAbstract"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-syncIncludeAbstract"
-                data-l10n-id="pref-syncIncludeAbstract"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-syncIncludeAbstract"></html:span>
+            </html:label>
 
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-syncIncludeAttachments"
                 preference="syncIncludeAttachments"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-syncIncludeAttachments"
-                data-l10n-id="pref-syncIncludeAttachments"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-syncIncludeAttachments"></html:span>
+            </html:label>
 
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-syncIncludeAnnotations"
                 preference="syncIncludeAnnotations"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-syncIncludeAnnotations"
-                data-l10n-id="pref-syncIncludeAnnotations"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-syncIncludeAnnotations"></html:span>
+            </html:label>
 
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-syncIncludeTags"
                 preference="syncIncludeTags"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-syncIncludeTags"
-                data-l10n-id="pref-syncIncludeTags"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-syncIncludeTags"></html:span>
+            </html:label>
 
-            <label class="zws-checkbox-row">
+            <html:label class="zws-checkbox-row">
               <html:input
                 type="checkbox"
                 id="zotero-prefpane-__addonRef__-syncIncludeNotes"
                 preference="syncIncludeNotes"
               ></html:input>
-              <html:label
-                for="zotero-prefpane-__addonRef__-syncIncludeNotes"
-                data-l10n-id="pref-syncIncludeNotes"
-              ></html:label>
-            </label>
+              <html:span data-l10n-id="pref-syncIncludeNotes"></html:span>
+            </html:label>
           </html:div>
         </html:div>
 
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">自动同步</html:h3>
-          <label class="zws-checkbox-row" style="margin-bottom: 12px">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-autoSyncEnabled"
-              preference="autoSyncEnabled"
-            ></html:input>
-            <html:label
-              for="zotero-prefpane-__addonRef__-autoSyncEnabled"
-              data-l10n-id="pref-autoSyncEnabled"
-            ></html:label>
-          </label>
-
-          <label class="zws-checkbox-row" style="margin-bottom: 12px">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-autoSyncOnModify"
-              preference="autoSyncOnModify"
-            ></html:input>
-            <html:label
-              for="zotero-prefpane-__addonRef__-autoSyncOnModify"
-              data-l10n-id="pref-autoSyncOnModify"
-            ></html:label>
-          </label>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-autoSync"
+          ></html:h3>
+          <html:div class="zws-check-group">
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-autoSyncEnabled"
+                preference="autoSyncEnabled"
+              ></html:input>
+              <html:span data-l10n-id="pref-autoSyncEnabled"></html:span>
+            </html:label>
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-autoSyncOnModify"
+                preference="autoSyncOnModify"
+              ></html:input>
+              <html:span data-l10n-id="pref-autoSyncOnModify"></html:span>
+            </html:label>
+          </html:div>
 
           <html:div class="zws-form-row">
             <html:label
@@ -679,7 +683,7 @@
             data-l10n-id="pref-autoSyncTag-help"
           ></html:p>
 
-          <html:div class="zws-form-row" style="margin-top: 8px">
+          <html:div class="zws-form-row">
             <html:label
               class="zws-label"
               data-l10n-id="pref-autoSyncLibraries"
@@ -696,18 +700,20 @@
         </html:div>
 
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">远端改动提醒</html:h3>
-          <label class="zws-checkbox-row" style="margin-bottom: 12px">
-            <html:input
-              type="checkbox"
-              id="zotero-prefpane-__addonRef__-changePollEnabled"
-              preference="changePollEnabled"
-            ></html:input>
-            <html:label
-              for="zotero-prefpane-__addonRef__-changePollEnabled"
-              data-l10n-id="pref-changePollEnabled"
-            ></html:label>
-          </label>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-changePoll"
+          ></html:h3>
+          <html:div class="zws-check-group">
+            <html:label class="zws-checkbox-row">
+              <html:input
+                type="checkbox"
+                id="zotero-prefpane-__addonRef__-changePollEnabled"
+                preference="changePollEnabled"
+              ></html:input>
+              <html:span data-l10n-id="pref-changePollEnabled"></html:span>
+            </html:label>
+          </html:div>
 
           <html:div class="zws-form-row">
             <html:label
@@ -732,7 +738,10 @@
 
       <html:div class="zws-tab-panel" data-panel="template">
         <html:div class="zws-card">
-          <html:h3 class="zws-card-title">模板与预览</html:h3>
+          <html:h3
+            class="zws-card-title"
+            data-l10n-id="pref-card-template"
+          ></html:h3>
 
           <html:div
             class="zws-var-chips"
@@ -777,15 +786,10 @@
               data-l10n-id="pref-bodyTemplate"
             ></html:label>
             <html:textarea
-              class="zws-textarea"
+              class="zws-textarea zws-mono"
               id="zotero-prefpane-__addonRef__-bodyTemplate"
               preference="bodyTemplate"
               rows="12"
-              style="
-                font-family:
-                  &quot;SF Mono&quot;, Monaco, &quot;Cascadia Code&quot;,
-                  &quot;Roboto Mono&quot;, Consolas, monospace;
-              "
             ></html:textarea>
           </html:div>
           <html:p
@@ -853,7 +857,6 @@
             id="zotero-prefpane-__addonRef__-titlePreview"
             rows="1"
             readonly="readonly"
-            style="overflow: auto; resize: vertical"
           ></html:textarea>
 
           <html:div class="zws-view-bar">
@@ -902,7 +905,6 @@
             id="zotero-prefpane-__addonRef__-bodyPreview"
             rows="10"
             readonly="readonly"
-            style="overflow: auto; resize: vertical"
           ></html:textarea>
         </html:div>
       </html:div>

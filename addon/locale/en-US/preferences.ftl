@@ -38,7 +38,7 @@ pref-bodyTemplate-help = Syntax: double-braces variables are escaped, triple-bra
 pref-changePollEnabled = Enable remote change polling reminders
 pref-changePollInterval = Polling interval (minutes)
 pref-changePoll-help = Periodically check whether synced notes were modified on the WPS/Craft side; when changes are found, a dialog asks whether to pull them back to Zotero. Nothing is overwritten automatically.
-pref-help = { $name } Build { $version } { $time }
+pref-help = Build { $version }
 
 # MCP Server (external endpoint)
 pref-mcpServerWriteEnabled = Allow external MCP clients to write (sync / pull)
@@ -71,3 +71,17 @@ pref-colorSemanticMap = Color Semantic Map (JSON, optional)
 pref-colorSemanticMap-help = E.g. {"{"}“#7fba00”:“Key finding”,“#ff6666”:“To verify”{"}"}: maps Zotero annotation colors to semantic group titles; leave blank to use default color names. Invalid JSON is silently ignored and never blocks sync
 pref-craftArchiveByTag = Auto-archive by first tag into subfolders
 pref-craftArchiveByTag-help = When enabled, newly created Craft documents are placed into a subfolder named after the item's first tag (created under Target Folder if missing); existing documents are not moved, and any archiving failure falls back to the default folder without blocking sync
+
+# Preference cards & tabs
+pref-card-syncOptions = Sync Options
+pref-card-autoSync = Auto Sync
+pref-card-changePoll = Remote Change Alerts
+pref-card-mcpConnection = MCP Connection
+pref-card-craftConnection = Craft Connection
+pref-card-mcpServer = MCP Server (External API)
+pref-card-reading = Reading Experience
+pref-card-template = Template & Preview
+pref-tab-sync = Sync
+pref-tab-connection = Connection
+pref-tab-template = Template & Preview
+pref-tab-reading = Reading
