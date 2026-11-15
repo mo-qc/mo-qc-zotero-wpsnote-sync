@@ -273,8 +273,11 @@ function blockWalk(node: Node | null, out: string[]): void {
         .replace(/\n{2,}/g, "\n")
         .trim();
       if (inner) {
+        // 批注卡（📝 有批注 / 💡 无批注）之间插分隔线，多卡不再糊成一片；
+        // 摘要（📋）等单卡区块不加，避免卡与下一标题间出现冗余线
+        const sep = emoji === "📝" || emoji === "💡" ? "***\n\n" : "";
         out.push(
-          `<callout>\n${emoji ? `${emoji} ` : ""}${inner}</callout>\n\n`,
+          `<callout>\n${emoji ? `${emoji} ` : ""}${inner}</callout>\n\n${sep}`,
         );
       }
       return;

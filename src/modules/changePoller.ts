@@ -207,6 +207,9 @@ async function detectChanges(
       const base = String(entry.noteModified || "");
       // 基准格式分流：ISO 时间来自 Craft 同步，纯数字来自 WPS 同步
       if (/\d{4}-\d{2}-\d{2}T/.test(base)) {
+        // 分区就绪：标记后的用户笔记区手改是预期行为（不属于"远端改动"，
+        // 无需提醒回流）；标记前的 Zotero 区以 Zotero 为准，同样无需回流
+        if (entry.markerBlockId) return null;
         if (!craftClient || !entry.craftDocId) return null;
         const prev = Date.parse(base);
         if (!Number.isFinite(prev)) return null;

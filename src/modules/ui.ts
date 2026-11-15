@@ -22,6 +22,7 @@ import {
   removeMappedNote,
   recordPullNoteId,
   updateNoteModified,
+  PULL_NOTE_MARK,
 } from "./syncMapping";
 import { runWithConcurrency } from "../utils/concurrencyHelper";
 import { semanticXmlToZoteroHtml } from "../utils/semanticRender";
@@ -1263,7 +1264,7 @@ export async function pullFromWps(itemsArg?: Zotero.Item[]) {
           child = new Zotero.Item("note");
           child.parentID = item.id;
         }
-        child.setNote(html);
+        child.setNote(PULL_NOTE_MARK + html);
         await child.saveTx();
         recordPullNoteId(item.key, String(child.id));
 
@@ -1407,7 +1408,7 @@ export async function pullFromCraft(itemsArg?: Zotero.Item[]) {
           child = new Zotero.Item("note");
           child.parentID = item.id;
         }
-        child.setNote(html);
+        child.setNote(PULL_NOTE_MARK + html);
         await child.saveTx();
         recordPullNoteId(item.key, String(child.id));
 

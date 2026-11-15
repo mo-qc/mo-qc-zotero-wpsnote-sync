@@ -354,7 +354,32 @@ export function classifyError(err: any): SyncErrorType {
   return "other";
 }
 
+// per-item 同步互斥：手动 api.syncItem 与自动同步可并发触发同一文献，
+// 两次全量替换的 delete/insert 交错会造成双套正文（真机复现过）
+const syncingItemKeys = new Set<string>();
+
 export async function syncItem(
+  item: Zotero.Item,
+  options?: SyncOptions,
+): Promise<SyncResult> {
+  if (syncingItemKeys.has(item.key)) {
+    return {
+      success: false,
+      itemKey: item.key,
+      title: String(item.getField("title") || ""),
+      error: "该文献正在同步中，已跳过本次并发请求",
+      errorType: "other",
+    };
+  }
+  syncingItemKeys.add(item.key);
+  try {
+    return await syncItemUnlocked(item, options);
+  } finally {
+    syncingItemKeys.delete(item.key);
+  }
+}
+
+async function syncItemUnlocked(
   item: Zotero.Item,
   options?: SyncOptions,
 ): Promise<SyncResult> {

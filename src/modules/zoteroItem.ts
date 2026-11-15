@@ -9,7 +9,11 @@ import type {
   ZoteroNoteImage,
   ZoteroAnnotation,
 } from "../utils/xmlBuilder";
-import { getMappedEntry } from "./syncMapping";
+import {
+  getCraftMappedEntry,
+  getMappedEntry,
+  PULL_NOTE_MARK,
+} from "./syncMapping";
 
 function getCreatorString(creator: any): string {
   const parts: string[] = [];
@@ -335,8 +339,13 @@ export function extractItemData(
 
   const notes: ZoteroNote[] = [];
   if (opts.includeNotes && item.getNotes) {
-    // 排除回流子笔记：它是同步产物的快照，回同步会造成内容套娃放大
-    const pullId = Number(getMappedEntry(item.key)?.pullNoteId || 0);
+    // 排除回流子笔记：它是同步产物的快照，回同步会造成内容套娃放大。
+    // Craft-only 条目无 noteId，getMappedEntry 的 noteId 守卫会漏读——
+    // 两个读取器都试（craft 守卫在前），否则排除失效、回流笔记被拼回正文
+    const pullId = Number(
+      (getCraftMappedEntry(item.key) || getMappedEntry(item.key))?.pullNoteId ||
+        0,
+    );
     const noteIds = item.getNotes();
     for (const noteId of noteIds) {
       if (pullId && noteId === pullId) continue;
@@ -344,6 +353,8 @@ export function extractItemData(
       if (noteItem && noteItem.isNote()) {
         const note = noteItem.getNote ? noteItem.getNote() : "";
         const noteHtml = String(note);
+        // 回流快照标记排除：pullNoteId 可能因映射竞态丢失，标记兜底
+        if (noteHtml.includes(PULL_NOTE_MARK)) continue;
         notes.push({
           title: String(noteItem.getField("title") || ""),
           content: noteHtml,
